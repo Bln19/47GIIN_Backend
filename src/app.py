@@ -106,6 +106,84 @@ def login():
         }), 200
     else:
         return jsonify({"error": "Usuario no encontrado o contraseña incorrecta"}), 401
+    
+
+#PROPIETARIOS
+
+#Listar Propietarios
+@app.route('/propietarios', methods=['GET'])
+@jwt_required()
+def get_propietarios():
+    current_user_id = get_jwt_identity()
+    cursor = db.database.cursor(dictionary=True)
+    
+    # Obtener la urbanización del administrador
+    cursor.execute("SELECT id_urbanizacion FROM users WHERE id_perfilUsuario = %s", (current_user_id,))
+    urbanizacion_id = cursor.fetchone().get('id_urbanizacion')
+    if not urbanizacion_id:
+        return jsonify({'error': 'Urbanización no encontrada para el administrador'}), 404
+    
+    # Obtener lista de propietarios de la urbanización
+    cursor.execute("""
+        SELECT u.id_perfilUsuario, u.nombreUsuario AS username, u.nombre, u.apellidos, u.telefono, u.email
+        FROM users u
+        WHERE u.id_urbanizacion = %s AND u.id_rol = (SELECT id_rol FROM rol WHERE nombre = 'propietario')
+    """, (urbanizacion_id,))
+    propietarios = cursor.fetchall()
+    return jsonify(propietarios), 200
+
+#Listar Propietario
+@app.route('/propietarios/<int:id>', methods=['GET'])
+@jwt_required()
+def get_propietario(id):
+    cursor = db.database.cursor(dictionary=True)
+    
+    # Obtener datos del propietario
+    cursor.execute("""
+        SELECT id_perfilUsuario, nombreUsuario AS username, nombre, apellidos, telefono, email
+        FROM users
+        WHERE id_perfilUsuario = %s AND id_rol = (SELECT id_rol FROM rol WHERE nombre = 'propietario')
+    """, (id,))
+    propietario = cursor.fetchone()
+    
+    if not propietario:
+        return jsonify({'error': 'Propietario no encontrado'}), 404
+    
+    return jsonify(propietario), 200
+
+
+#Editar Propietario
+@app.route('/propietarios/<int:id>', methods=['PUT'])
+@jwt_required()
+def update_propietario(id):
+    cursor = db.database.cursor(dictionary=True)
+
+    # Obtener los datos del propietario a actualizar
+    data = request.get_json()
+    updates = []
+    fields = []
+
+    if 'nombre' in data:
+        updates.append(data['nombre'])
+        fields.append("nombre = %s")
+    if 'apellidos' in data:
+        updates.append(data['apellidos'])
+        fields.append("apellidos = %s")
+    if 'telefono' in data:
+        updates.append(data['telefono'])
+        fields.append("telefono = %s")
+    if 'email' in data:
+        updates.append(data['email'])
+        fields.append("email = %s")
+
+    query = "UPDATE users SET " + ", ".join(fields) + " WHERE id_perfilUsuario = %s AND id_rol = (SELECT id_rol FROM rol WHERE nombre = 'propietario')"
+    updates.append(id)
+
+    cursor.execute(query, tuple(updates))
+    db.database.commit()
+    return jsonify({'success': True}), 200
+
+
 
 # URBANIZACION
 @app.route('/urbanizacion/<int:id>', methods=['GET'])
