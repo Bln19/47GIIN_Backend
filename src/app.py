@@ -24,35 +24,64 @@ jwt = JWTManager(app)
 def home():
     return render_template('index.html')
 
-# REGISTRO
+# REGISTRO - PROPITARIO y EMPLEADO -
 @app.route('/register', methods=['POST'])
 @jwt_required()
 def register():
+    current_user_id = get_jwt_identity()
+    
+    # Obtener la urbanización del administrador
+    cursor = db.database.cursor(dictionary=True)
+    cursor.execute("SELECT id_urbanizacion FROM users WHERE id_perfilUsuario = %s", (current_user_id,))
+    urbanization_data = cursor.fetchone()
+    
+    if not urbanization_data:
+        return jsonify({'error': 'Urbanización no encontrada para el administrador'}), 404
 
+    urbanization_id = urbanization_data['id_urbanizacion']
 
     data = request.get_json()
+    print("Datos recibidos:", data)
+
     username = data.get('username')
     plain_password = data.get('contrasena')
     role = data.get('rol')
-    urbanization_id = data.get('urbanization_id')
-    role_id = get_role_id(role)
+    nombre = data.get('nombre')
+    apellidos = data.get('apellidos')
+    telefono = data.get('telefono')
+    email = data.get('email')
 
-    if not username or not plain_password or role is None:
+    print(f"username: {username}")
+    print(f"plain_password: {plain_password}")
+    print(f"role: {role}")
+    print(f"nombre: {nombre}")
+    print(f"apellidos: {apellidos}")
+    print(f"telefono: {telefono}")
+    print(f"email: {email}")
+
+    role_id = get_role_id(role)
+    print("Rol ID:", role_id)
+
+    if not all([username, plain_password, role, nombre, apellidos, telefono, email]):
+        print("Faltan datos para el registro")
         return jsonify({'error': 'Faltan datos para el registro'}), 400
 
     hashed_password = generate_password_hash(plain_password)
-   
 
     try:
         cursor = db.database.cursor()
-        cursor.execute("INSERT INTO users (nombreUsuario, contrasena, id_rol, id_urbanizacion) VALUES (%s, %s, %s, %s)",
-                       (username, hashed_password, role_id, urbanization_id))
+        cursor.execute("""
+            INSERT INTO users (nombreUsuario, contrasena, id_rol, id_urbanizacion, nombre, apellidos, telefono, email) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (username, hashed_password, role_id, urbanization_id, nombre, apellidos, telefono, email))
         db.database.commit()
+        print(f"Usuario {username} registrado con éxito.")
     except Exception as e:
         print(f"Error al guardar en la base de datos: {e}")
         return jsonify({'error': 'Error al registrar el usuario'}), 500
 
     return jsonify({'success': True}), 201
+
 
 
 # LOGIN
@@ -183,6 +212,102 @@ def update_propietario(id):
     db.database.commit()
     return jsonify({'success': True}), 200
 
+# Eliminar Propietario
+@app.route('/propietarios/<int:id>', methods=['DELETE'])
+@jwt_required()
+def delete_propietario(id):
+    cursor = db.database.cursor(dictionary=True)
+    # Eliminar el propietario
+    cursor.execute("DELETE FROM users WHERE id_perfilUsuario = %s", (id,))
+    db.database.commit()
+    
+    return jsonify({'success': True}), 200
+
+
+#EMPLEADOS
+
+#Listar Empleados
+@app.route('/empleados', methods=['GET'])
+@jwt_required()
+def get_empleados():
+    current_user_id = get_jwt_identity()
+    cursor = db.database.cursor(dictionary=True)
+    
+    # Obtener la urbanización del administrador
+    cursor.execute("SELECT id_urbanizacion FROM users WHERE id_perfilUsuario = %s", (current_user_id,))
+    urbanizacion_id = cursor.fetchone().get('id_urbanizacion')
+    if not urbanizacion_id:
+        return jsonify({'error': 'Urbanización no encontrada para el administrador'}), 404
+    
+    # Obtener lista de empleados de la urbanización
+    cursor.execute("""
+        SELECT u.id_perfilUsuario, u.nombreUsuario AS username, u.nombre, u.apellidos, u.telefono, u.email
+        FROM users u
+        WHERE u.id_urbanizacion = %s AND u.id_rol = (SELECT id_rol FROM rol WHERE nombre = 'empleado')
+    """, (urbanizacion_id,))
+    empleados = cursor.fetchall()
+    return jsonify(empleados), 200
+
+#Listar Empleados
+@app.route('/empleados/<int:id>', methods=['GET'])
+@jwt_required()
+def get_empleado(id):
+    cursor = db.database.cursor(dictionary=True)
+    
+    # Obtener datos del propietario
+    cursor.execute("""
+        SELECT id_perfilUsuario, nombreUsuario AS username, nombre, apellidos, telefono, email
+        FROM users
+        WHERE id_perfilUsuario = %s AND id_rol = (SELECT id_rol FROM rol WHERE nombre = 'empleado')
+    """, (id,))
+    propietario = cursor.fetchone()
+    
+    if not propietario:
+        return jsonify({'error': 'Empleado no encontrado'}), 404
+    
+    return jsonify(propietario), 200
+
+#Editar Empleado
+@app.route('/empleados/<int:id>', methods=['PUT'])
+@jwt_required()
+def update_empleado(id):
+    cursor = db.database.cursor(dictionary=True)
+
+    # Obtener los datos del empleado a actualizar
+    data = request.get_json()
+    updates = []
+    fields = []
+
+    if 'nombre' in data:
+        updates.append(data['nombre'])
+        fields.append("nombre = %s")
+    if 'apellidos' in data:
+        updates.append(data['apellidos'])
+        fields.append("apellidos = %s")
+    if 'telefono' in data:
+        updates.append(data['telefono'])
+        fields.append("telefono = %s")
+    if 'email' in data:
+        updates.append(data['email'])
+        fields.append("email = %s")
+
+    query = "UPDATE users SET " + ", ".join(fields) + " WHERE id_perfilUsuario = %s AND id_rol = (SELECT id_rol FROM rol WHERE nombre = 'empleado')"
+    updates.append(id)
+
+    cursor.execute(query, tuple(updates))
+    db.database.commit()
+    return jsonify({'success': True}), 200
+
+# Eliminar Empleado
+@app.route('/empleados/<int:id>', methods=['DELETE'])
+@jwt_required()
+def delete_empleado(id):
+    cursor = db.database.cursor(dictionary=True)
+    # Eliminar el empleado
+    cursor.execute("DELETE FROM users WHERE id_perfilUsuario = %s", (id,))
+    db.database.commit()
+    
+    return jsonify({'success': True}), 200
 
 
 # URBANIZACION
