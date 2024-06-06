@@ -5,7 +5,8 @@ from flask_jwt_extended import JWTManager, create_access_token, jwt_required, ge
 import os
 import database as db
 
-# acceder a index.html para que pueda ser lanzado
+
+# acceder a index.html
 template_dir = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
 template_dir = os.path.join(template_dir, 'src', 'templates')
 
@@ -17,14 +18,29 @@ CORS(app, supports_credentials=True)
 app.config['JWT_SECRET_KEY'] = os.environ.get('SECRET_KEY', 'urba')  # Clave secreta para JWT
 jwt = JWTManager(app)
 
-# Rutas de la aplicación
 
+
+# ----------------------------------------------------------------------------------------------------
+
+# -------------------------------------- RUTAS DE LA APLICACION --------------------------------------
+
+# ----------------------------------------------------------------------------------------------------
+
+
+
+# ----------------------------------------------------------------------------------------------------
 # RUTA PRINCIPAL
+# ----------------------------------------------------------------------------------------------------
+
 @app.route('/')
 def home():
     return render_template('index.html')
 
+
+# ----------------------------------------------------------------------------------------------------
 # REGISTRO - PROPITARIO y EMPLEADO -
+# ----------------------------------------------------------------------------------------------------
+
 @app.route('/register', methods=['POST'])
 @jwt_required()
 def register():
@@ -83,8 +99,10 @@ def register():
     return jsonify({'success': True}), 201
 
 
-
+# ----------------------------------------------------------------------------------------------------
 # LOGIN
+# ----------------------------------------------------------------------------------------------------
+
 @app.route('/login', methods=['POST'])
 def login():
     if not request.is_json:
@@ -135,18 +153,21 @@ def login():
         }), 200
     else:
         return jsonify({"error": "Usuario no encontrado o contraseña incorrecta"}), 401
-    
 
-#PROPIETARIOS
 
-#Listar Propietarios
+# ----------------------------------------------------------------------------------------------------
+# PROPIETARIOS
+# ----------------------------------------------------------------------------------------------------
+
+# Listar Propietarios
+
 @app.route('/propietarios', methods=['GET'])
 @jwt_required()
 def get_propietarios():
     current_user_id = get_jwt_identity()
     cursor = db.database.cursor(dictionary=True)
     
-    # Obtener la urbanización del administrador
+    # Obtener la urbanización
     cursor.execute("SELECT id_urbanizacion FROM users WHERE id_perfilUsuario = %s", (current_user_id,))
     urbanizacion_id = cursor.fetchone().get('id_urbanizacion')
     if not urbanizacion_id:
@@ -161,7 +182,8 @@ def get_propietarios():
     propietarios = cursor.fetchall()
     return jsonify(propietarios), 200
 
-#Listar Propietario
+# Listar Propietario
+
 @app.route('/propietarios/<int:id>', methods=['GET'])
 @jwt_required()
 def get_propietario(id):
@@ -181,13 +203,14 @@ def get_propietario(id):
     return jsonify(propietario), 200
 
 
-#Editar Propietario
+# Editar Propietario
+
 @app.route('/propietarios/<int:id>', methods=['PUT'])
 @jwt_required()
 def update_propietario(id):
     cursor = db.database.cursor(dictionary=True)
 
-    # Obtener los datos del propietario a actualizar
+    # Obtener los datos del propietario a editar
     data = request.get_json()
     updates = []
     fields = []
@@ -213,6 +236,7 @@ def update_propietario(id):
     return jsonify({'success': True}), 200
 
 # Eliminar Propietario
+
 @app.route('/propietarios/<int:id>', methods=['DELETE'])
 @jwt_required()
 def delete_propietario(id):
@@ -224,16 +248,19 @@ def delete_propietario(id):
     return jsonify({'success': True}), 200
 
 
-#EMPLEADOS
+# ----------------------------------------------------------------------------------------------------
+# EMPLEADOS
+# ----------------------------------------------------------------------------------------------------
 
-#Listar Empleados
+# Listar Empleados
+
 @app.route('/empleados', methods=['GET'])
 @jwt_required()
 def get_empleados():
     current_user_id = get_jwt_identity()
     cursor = db.database.cursor(dictionary=True)
     
-    # Obtener la urbanización del administrador
+    # Obtener la urbanización
     cursor.execute("SELECT id_urbanizacion FROM users WHERE id_perfilUsuario = %s", (current_user_id,))
     urbanizacion_id = cursor.fetchone().get('id_urbanizacion')
     if not urbanizacion_id:
@@ -248,7 +275,9 @@ def get_empleados():
     empleados = cursor.fetchall()
     return jsonify(empleados), 200
 
-#Listar Empleados
+
+# Listar Empleados
+
 @app.route('/empleados/<int:id>', methods=['GET'])
 @jwt_required()
 def get_empleado(id):
@@ -267,7 +296,9 @@ def get_empleado(id):
     
     return jsonify(propietario), 200
 
-#Editar Empleado
+
+# Editar Empleado
+
 @app.route('/empleados/<int:id>', methods=['PUT'])
 @jwt_required()
 def update_empleado(id):
@@ -298,7 +329,9 @@ def update_empleado(id):
     db.database.commit()
     return jsonify({'success': True}), 200
 
+
 # Eliminar Empleado
+
 @app.route('/empleados/<int:id>', methods=['DELETE'])
 @jwt_required()
 def delete_empleado(id):
@@ -310,10 +343,12 @@ def delete_empleado(id):
     return jsonify({'success': True}), 200
 
 
-
+# ----------------------------------------------------------------------------------------------------
 # ROLES
+# ----------------------------------------------------------------------------------------------------
 
-#Listar todos roles
+# Listar todos roles
+
 @app.route('/roles/all', methods=['GET'])
 @jwt_required()
 def get_all_roles():
@@ -324,7 +359,8 @@ def get_all_roles():
     return jsonify(roles), 200
 
 
-#Listar Roles urbanizacion
+# Listar Roles urbanizacion
+
 @app.route('/roles', methods=['GET'])
 @jwt_required()
 def get_roles():
@@ -348,9 +384,157 @@ def get_roles():
     roles = cursor.fetchall()
     return jsonify(roles), 200
 
+# Listar Rol por id
 
+@app.route('/roles/<int:id>', methods=['GET'])
+@jwt_required()
+def get_rol(id):
+    try:
+        cursor = db.database.cursor(dictionary=True)
+        query = "SELECT id_rol, nombre FROM rol WHERE id_rol = %s"
+        cursor.execute(query, (id,))
+        rol = cursor.fetchone()
+        
+        if not rol:
+            return jsonify({'error': 'Rol no encontrado'}), 404
+
+        return jsonify(rol), 200
+    except Exception as e:
+        print(f"Error de base de datos: {e}")
+        return jsonify({'error': 'Error de conexión con la base de datos'}), 500
+    
+#Listar Rol por nombre
+
+def get_rol_id(rol_nombre):
+    cursor=db.database.cursor(dictionary=True)
+    cursor.execute("SELECT id_rol FROM rol WHERE nombre = %s", (rol_nombre,))
+    role = cursor.fetchone()
+    return role['id_rol'] if role else None
+
+
+# Añadir Rol
+
+@app.route('/roles', methods=['POST'])
+@jwt_required()
+def add_rol():
+    current_user_id = get_jwt_identity()
+    data = request.get_json()
+
+    nombre = data.get('nombre')
+
+    if not nombre:
+        return jsonify({'error': 'Nombre es requerido'}), 400
+
+    try:
+        # Usar un cursor que devuelve diccionarios
+        cursor = db.database.cursor(dictionary=True)
+        
+        # Obtener la urbanización del administrador
+        cursor.execute("SELECT id_urbanizacion FROM users WHERE id_perfilUsuario = %s", (current_user_id,))
+        result = cursor.fetchone()
+        if result is None:
+            return jsonify({'error': 'Urbanización no encontrada para el administrador'}), 404
+        
+        urbanizacion_id = result.get('id_urbanizacion')
+
+        # Añadir el nuevo rol
+        insert_rol_query = """
+            INSERT INTO rol (nombre) 
+            VALUES (%s)
+        """
+        cursor.execute(insert_rol_query, (nombre,))
+        db.database.commit()
+
+        return jsonify({'success': 'Rol creado exitosamente', 'id_urbanizacion': urbanizacion_id}), 201
+    except Exception as e:
+        db.database.rollback()
+        print(f"Error de base de datos: {e}")
+        return jsonify({'error': 'Error al crear el rol'}), 500
+
+# Editar Rol
+
+@app.route('/roles/<int:id>', methods=['PUT'])
+@jwt_required()
+def update_rol(id):
+    current_user_id = get_jwt_identity()
+    data = request.get_json()
+
+    nombre = data.get('nombre')
+
+    if not nombre:
+        return jsonify({'error': 'Nombre es requerido'}), 400
+
+    try:
+        cursor = db.database.cursor()
+
+        # Actualizar el rol
+        update_rol_query = """
+            UPDATE rol 
+            SET nombre = %s
+            WHERE id_rol = %s
+        """
+        cursor.execute(update_rol_query, (nombre, id))
+        db.database.commit()
+
+        if cursor.rowcount == 0:
+            return jsonify({'error': 'Rol no encontrado'}), 404
+
+        return jsonify({'success': 'Rol actualizado exitosamente'}), 200
+    except Exception as e:
+        db.database.rollback()
+        print(f"Error de base de datos: {e}")
+        return jsonify({'error': 'Error al actualizar el rol'}), 500
+
+# Eliminar Rol
+
+@app.route('/roles/<int:rol_id>', methods=['DELETE'])
+@jwt_required()
+def delete_rol(rol_id):
+    current_user_id = get_jwt_identity()
+
+    try:
+        cursor = db.database.cursor()
+
+        # Eliminar las asociaciones en la tabla rol_permiso
+        delete_rol_permiso_query = """
+            DELETE FROM rol_permiso 
+            WHERE id_rol = %s
+        """
+        cursor.execute(delete_rol_permiso_query, (rol_id,))
+
+        # Eliminar las asociaciones en la tabla users
+        update_users_query = """
+            UPDATE users 
+            SET id_rol = NULL 
+            WHERE id_rol = %s
+        """
+        cursor.execute(update_users_query, (rol_id,))
+
+        # Eliminar el rol en la tabla rol
+        delete_rol_query = """
+            DELETE FROM rol 
+            WHERE id_rol = %s
+        """
+        cursor.execute(delete_rol_query, (rol_id,))
+
+        db.database.commit()
+
+        if cursor.rowcount == 0:
+            return jsonify({'error': 'Rol no encontrado'}), 404
+
+        return jsonify({'success': 'Rol eliminado exitosamente'}), 200
+    except Exception as e:
+        db.database.rollback()
+        print(f"Error de base de datos: {e}")
+        return jsonify({'error': 'Error al eliminar el rol'}), 500
+
+
+# ----------------------------------------------------------------------------------------------------
 # PERMISOS
-#Listar Permisos
+# ----------------------------------------------------------------------------------------------------
+
+# Listar Permisos
+
 @app.route('/permisos', methods=['GET'])
 @jwt_required()
 def get_all_permisos():
@@ -369,7 +553,8 @@ def get_all_permisos():
         return jsonify({'error': 'Error de conexión con la base de datos'}), 500
     
 
-#Listar permiso por id
+# Listar permiso por id
+
 @app.route('/permisos/<int:id>', methods=['GET'])
 @jwt_required()
 def get_permiso(id):
@@ -398,8 +583,8 @@ def get_permiso(id):
         print(f"Error de base de datos: {e}")
         return jsonify({'error': 'Error de conexión con la base de datos'}), 500
 
+# Editar Permisos
 
-#Editar Permisos
 @app.route('/permisos/<int:id>', methods=['PUT'])
 @jwt_required()
 def update_permiso(id):
@@ -430,13 +615,12 @@ def update_permiso(id):
         cursor = db.database.cursor()
         if updates:
             cursor.execute(query, tuple(params))
+        
         #Actualizar roles asociados
         if roles is not None:
-            #Eliminar asociaciones actuales
             delete_rol_permiso_query = "DELETE FROM rol_permiso WHERE id_permiso = %s"    
             cursor.execute(delete_rol_permiso_query, (id,))
 
-            #Añadir nuevas asociaciones
             insert_rol_permiso_query = "INSERT INTO rol_permiso (id_rol, id_permiso) VALUES (%s, %s)"
             for rol_id in roles:
                 cursor.execute(insert_rol_permiso_query, (rol_id, id))
@@ -451,9 +635,8 @@ def update_permiso(id):
         print(f"Error de base de datos: {e}")
         return jsonify({'error': 'Error de conexión con la base de datos'}), 500
     
-
-
 #Listar Permisos por Rol
+
 @app.route('/roles/<int:id>/permisos', methods=['GET'])
 @jwt_required()
 def get_permisos_by_rol(id):
@@ -485,8 +668,8 @@ def get_permisos_by_rol(id):
         print(f"Error de base de datos: {e}")
         return jsonify({'error': 'Error de conexión con la base de datos'}), 500
 
+# Añadir Permiso
 
-#Añadir Permiso
 @app.route('/permisos', methods=['POST'])
 @jwt_required()
 def add_permiso():
@@ -495,7 +678,7 @@ def add_permiso():
 
     nombre = data.get('nombre')
     descripcion = data.get('descripcion')
-    roles = data.get('roles')  # lista de id_rol
+    roles = data.get('roles')
 
     print("Datos recibidos:", data)
 
@@ -503,14 +686,23 @@ def add_permiso():
         return jsonify({'error': 'Nombre, Descripción y Roles son requeridos'}), 400
 
     try:
-        cursor = db.database.cursor()
-        # Anadir el nuevo permiso
+        cursor = db.database.cursor(dictionary=True)
+        
+        # Obtener la urbanización
+        cursor.execute("SELECT id_urbanizacion FROM users WHERE id_perfilUsuario = %s", (current_user_id,))
+        result = cursor.fetchone()
+        if result is None:
+            return jsonify({'error': 'Urbanización no encontrada para el administrador'}), 404
+        
+        urbanizacion_id = result.get('id_urbanizacion')
+
+        # Anadir nuevo permiso
         insert_permiso_query = """
             INSERT INTO permiso (nombre, descripcion) 
             VALUES (%s, %s)
         """
         cursor.execute(insert_permiso_query, (nombre, descripcion))
-        permiso_id = cursor.lastrowid  # Obtener el id del permiso recién insertado
+        permiso_id = cursor.lastrowid
 
         # Asociar el permiso con los roles
         insert_rol_permiso_query = """
@@ -522,14 +714,15 @@ def add_permiso():
 
         db.database.commit()
 
-        return jsonify({'success': 'Permiso creado exitosamente'}), 201
+        return jsonify({'success': 'Permiso creado exitosamente', 'id_urbanizacion': urbanizacion_id}), 201
     except Exception as e:
         db.database.rollback()
         print(f"Error de base de datos: {e}")
         return jsonify({'error': 'Error al crear el permiso'}), 500
 
 
-#Eliminar Permiso
+# Eliminar Permiso
+
 @app.route('/permisos/<int:permiso_id>', methods=['DELETE'])
 @jwt_required()
 def delete_permiso(permiso_id):
@@ -563,10 +756,12 @@ def delete_permiso(permiso_id):
         return jsonify({'error': 'Error al eliminar el permiso'}), 500
     
 
-
-
-
+# ----------------------------------------------------------------------------------------------------
 # URBANIZACION
+# ----------------------------------------------------------------------------------------------------
+
+# Obtener Datos Urbanizacion
+
 @app.route('/urbanizacion/<int:id>', methods=['GET'])
 @jwt_required()
 def get_urbanizacion(id):
@@ -590,7 +785,50 @@ def get_role_id(role_name):
     role = cursor.fetchone()
     return role['id_rol'] if role else None
 
-# Lanzar aplicación
+# Añadir Urbanizacion
+
+@app.route('/register_urbanizacion', methods=['POST'])
+@jwt_required()
+def add_urbanizacion():
+    
+    current_user_id = get_jwt_identity()
+
+    cursor = db.database.cursor(dictionary=True)
+    cursor.execute("SELECT id_rol FROM users WHERE id_perfilUsuario = %s", (current_user_id,))
+    role_data = cursor.fetchone()
+
+    superadmin_id = get_rol_id('superadmin')
+    if role_data['id_rol'] != superadmin_id:
+        return jsonify({'error': 'No autorizado'}), 403
+    
+    data = request.get_json()
+    nombre = data.get('nombre')
+    cif = data.get('cif')
+    direccion = data.get ('direccion')
+    cod_postal = data.get('cod_postal')
+    id_ciudad = data.get('id_ciudad')
+    url_logo = data.get('url_logo')
+
+    if not all([nombre, cif, direccion, cod_postal, url_logo, id_ciudad]):
+        return jsonify({'error': 'Faltan datos'}), 400
+    
+    try:
+        cursor.execute("""
+            INSERT INTO urbanizacion (nombre, cif, direccion, cod_postal, url_logo, id_ciudad) 
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (nombre, cif, direccion, cod_postal, url_logo, id_ciudad))
+        db.database.commit()
+        return jsonify({'success': True}), 201
+    except Exception as e:
+        return jsonify({'error': f'Error al registrar la urbanización: {e}'}), 500
+
+
+
+
+# ----------------------------------------------------------------------------------------------------
+# --------------------------------------- LANZAR APLICACION -----------------------------------------
+# ----------------------------------------------------------------------------------------------------
+
 if __name__ == '__main__':
     app.run(debug=True, port=4000)
 
