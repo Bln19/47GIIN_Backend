@@ -41,6 +41,7 @@ def home():
 # REGISTRO - PROPITARIO y EMPLEADO -
 # ----------------------------------------------------------------------------------------------------
 
+#Registro propietario o empleados
 @app.route('/register', methods=['POST'])
 @jwt_required()
 def register():
@@ -57,7 +58,7 @@ def register():
     urbanization_id = urbanization_data['id_urbanizacion']
 
     data = request.get_json()
-    print("Datos recibidos:", data)
+    # print("Datos recibidos:", data)
 
     username = data.get('username')
     plain_password = data.get('contrasena')
@@ -76,7 +77,7 @@ def register():
     print(f"email: {email}")
 
     role_id = get_role_id(role)
-    print("Rol ID:", role_id)
+    # print("Rol ID:", role_id)
 
     if not all([username, plain_password, role, nombre, apellidos, telefono, email]):
         print("Faltan datos para el registro")
@@ -91,12 +92,53 @@ def register():
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """, (username, hashed_password, role_id, urbanization_id, nombre, apellidos, telefono, email))
         db.database.commit()
-        print(f"Usuario {username} registrado con éxito.")
+        # print(f"Usuario {username} registrado con éxito.")
     except Exception as e:
-        print(f"Error al guardar en la base de datos: {e}")
+        # print(f"Error al guardar en la base de datos: {e}")
         return jsonify({'error': 'Error al registrar el usuario'}), 500
 
     return jsonify({'success': True}), 201
+
+
+#Registro superadmin
+
+@app.route('/register_superadmin', methods=['POST'])
+@jwt_required()
+def register_superadmin():
+    current_user_id = get_jwt_identity()
+    
+    # Verificar si el usuario actual es superadmin
+    cursor = db.database.cursor(dictionary=True)
+    cursor.execute("SELECT id_rol FROM users WHERE id_perfilUsuario = %s", (current_user_id,))
+    role_data = cursor.fetchone()
+    
+    superadmin_id = get_role_id('superadmin')
+    if role_data['id_rol'] != superadmin_id:
+        return jsonify({'error': 'No autorizado'}), 403
+
+    data = request.get_json()
+    username = data.get('username')
+    plain_password = data.get('contrasena')
+    nombre = data.get('nombre')
+    apellidos = data.get('apellidos')
+    telefono = data.get('telefono')
+    email = data.get('email')
+
+    if not all([username, plain_password, nombre, apellidos, telefono, email]):
+        return jsonify({'error': 'Faltan datos para el registro'}), 400
+
+    hashed_password = generate_password_hash(plain_password)
+
+    try:
+        cursor.execute("""
+            INSERT INTO users (nombreUsuario, contrasena, id_rol, nombre, apellidos, telefono, email) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (username, hashed_password, superadmin_id, nombre, apellidos, telefono, email))
+        db.database.commit()
+        return jsonify({'success': True}), 201
+    except Exception as e:
+        return jsonify({'error': f'Error al registrar el superadmin: {e}'}), 500
+
 
 
 # ----------------------------------------------------------------------------------------------------
@@ -121,7 +163,7 @@ def login():
         SELECT u.id_perfilUsuario AS user_id, u.contrasena AS password, u.id_rol, u.id_urbanizacion, 
             urb.cif, urb.nombre, urb.direccion, urb.cod_postal, urb.url_logo, r.nombre AS role
         FROM users u
-        JOIN urbanizacion urb ON u.id_urbanizacion = urb.id_urbanizacion
+        LEFT JOIN urbanizacion urb ON u.id_urbanizacion = urb.id_urbanizacion
         JOIN rol r ON u.id_rol = r.id_rol
         WHERE u.nombreUsuario = %s
         """
@@ -134,23 +176,27 @@ def login():
 
     if user and check_password_hash(user['password'], contrasena):
         access_token = create_access_token(identity=user['user_id'])
-        return jsonify({
+        response_data = {
             "access_token": access_token,
             "user": {
                 "id": user['user_id'],
                 "rol": user['id_rol'],
                 "username": username,
                 "role": user['role']
-            },
-            "urbanizacion": {
-                "id": user['id_urbanizacion'],
-                "cif": user['cif'],
-                "nombre": user['nombre'],
-                "direccion": user['direccion'],
-                "cod_postal": user['cod_postal'],
-                "url_logo": user['url_logo']
             }
-        }), 200
+        }
+
+        if user['role'] != 'superadmin':
+            response_data["urbanizacion"] = {
+                "id": user['id_urbanizacion'],
+                "cif": user.get('cif'),
+                "nombre": user.get('nombre'),
+                "direccion": user.get('direccion'),
+                "cod_postal": user.get('cod_postal'),
+                "url_logo": user.get('url_logo')
+            }
+
+        return jsonify(response_data), 200
     else:
         return jsonify({"error": "Usuario no encontrado o contraseña incorrecta"}), 401
 
@@ -790,7 +836,6 @@ def get_role_id(role_name):
 @app.route('/register_urbanizacion', methods=['POST'])
 @jwt_required()
 def add_urbanizacion():
-    
     current_user_id = get_jwt_identity()
 
     cursor = db.database.cursor(dictionary=True)
@@ -802,28 +847,405 @@ def add_urbanizacion():
         return jsonify({'error': 'No autorizado'}), 403
     
     data = request.get_json()
-    nombre = data.get('nombre')
+    nombre_urbanizacion = data.get('nombre')
     cif = data.get('cif')
-    direccion = data.get ('direccion')
+    direccion = data.get('direccion')
     cod_postal = data.get('cod_postal')
-    id_ciudad = data.get('id_ciudad')
+    nombre_ciudad = data.get('nombre_ciudad')
+    nombre_pais = data.get('nombre_pais')
+    capital_pais = data.get('capital_pais')
     url_logo = data.get('url_logo')
 
-    if not all([nombre, cif, direccion, cod_postal, url_logo, id_ciudad]):
+    if not all([nombre_urbanizacion, cif, direccion, cod_postal, nombre_ciudad, nombre_pais, capital_pais]):
         return jsonify({'error': 'Faltan datos'}), 400
-    
+
     try:
+        # Verificar si el país existe, si no, agregarlo
+        cursor.execute("SELECT id_pais FROM pais WHERE nombre = %s", (nombre_pais,))
+        pais_data = cursor.fetchone()
+        if pais_data:
+            id_pais = pais_data['id_pais']
+        else:
+            cursor.execute("INSERT INTO pais (nombre, capital) VALUES (%s, %s)", (nombre_pais, capital_pais))
+            db.database.commit()
+            id_pais = cursor.lastrowid
+
+        # Verificar si la ciudad existe, si no, agregarla
+        cursor.execute("SELECT id_ciudad FROM ciudad WHERE nombre = %s AND id_pais = %s", (nombre_ciudad, id_pais))
+        ciudad_data = cursor.fetchone()
+        if ciudad_data:
+            id_ciudad = ciudad_data['id_ciudad']
+        else:
+            cursor.execute("INSERT INTO ciudad (nombre, id_pais) VALUES (%s, %s)", (nombre_ciudad, id_pais))
+            db.database.commit()
+            id_ciudad = cursor.lastrowid
+
+        # Agregar la nueva urbanización
         cursor.execute("""
             INSERT INTO urbanizacion (nombre, cif, direccion, cod_postal, url_logo, id_ciudad) 
             VALUES (%s, %s, %s, %s, %s, %s)
-        """, (nombre, cif, direccion, cod_postal, url_logo, id_ciudad))
+        """, (nombre_urbanizacion, cif, direccion, cod_postal, url_logo, id_ciudad))
         db.database.commit()
         return jsonify({'success': True}), 201
     except Exception as e:
         return jsonify({'error': f'Error al registrar la urbanización: {e}'}), 500
 
 
+# ----------------------------------------------------------------------------------------------------
+# PAIS
+# ----------------------------------------------------------------------------------------------------
 
+# Listar paises
+
+@app.route('/paises', methods=['GET'])
+@jwt_required()
+def get_paises():
+    current_user_id = get_jwt_identity()
+    
+    # Verificar si el usuario actual es superadmin
+    cursor = db.database.cursor(dictionary=True)
+    cursor.execute("SELECT id_rol FROM users WHERE id_perfilUsuario = %s", (current_user_id,))
+    role_data = cursor.fetchone()
+    
+    superadmin_id = get_role_id('superadmin')
+    if role_data['id_rol'] != superadmin_id:
+        return jsonify({'error': 'No autorizado'}), 403
+
+    try:
+        cursor.execute("""
+            SELECT DISTINCT p.id_pais, p.nombre, p.capital
+            FROM pais p
+            JOIN ciudad c ON p.id_pais = c.id_pais
+            JOIN urbanizacion u ON c.id_ciudad = u.id_ciudad
+        """)
+        paises = cursor.fetchall()
+        return jsonify(paises), 200
+    except Exception as e:
+        return jsonify({'error': f'Error al obtener los países: {e}'}), 500
+
+# Obtener Datos Pais
+
+@app.route('/pais/<int:id>', methods=['GET'])
+@jwt_required()
+def get_pais(id):
+    current_user_id = get_jwt_identity()
+    
+    # Verificar si el usuario actual es superadmin
+    cursor = db.database.cursor(dictionary=True)
+    cursor.execute("SELECT id_rol FROM users WHERE id_perfilUsuario = %s", (current_user_id,))
+    role_data = cursor.fetchone()
+    
+    superadmin_id = get_role_id('superadmin')
+    if role_data['id_rol'] != superadmin_id:
+        return jsonify({'error': 'No autorizado'}), 403
+
+    try:
+        cursor.execute("SELECT * FROM pais WHERE id_pais = %s", (id,))
+        pais = cursor.fetchone()
+        if not pais:
+            return jsonify({'error': 'País no encontrado'}), 404
+        return jsonify(pais), 200
+    except Exception as e:
+        return jsonify({'error': f'Error al obtener los detalles del país: {e}'}), 500
+
+# Añadir Pais
+
+@app.route('/paises', methods=['POST'])
+@jwt_required()
+def add_pais():
+    current_user_id = get_jwt_identity()
+    
+    # Verificar si el usuario actual es superadmin
+    cursor = db.database.cursor(dictionary=True)
+    cursor.execute("SELECT id_rol FROM users WHERE id_perfilUsuario = %s", (current_user_id,))
+    role_data = cursor.fetchone()
+    
+    superadmin_id = get_role_id('superadmin')
+    if role_data['id_rol'] != superadmin_id:
+        return jsonify({'error': 'No autorizado'}), 403
+
+    data = request.get_json()
+    nombre = data.get('nombre')
+    capital = data.get('capital')
+
+    if not nombre or not capital:
+        return jsonify({'error': 'Faltan datos'}), 400
+
+    try:
+        cursor = db.database.cursor()
+        cursor.execute("""
+            INSERT INTO pais (nombre, capital) 
+            VALUES (%s, %s)
+        """, (nombre, capital))
+        db.database.commit()
+        return jsonify({'success': 'País añadido'}), 201
+    except Exception as e:
+        db.database.rollback()
+        return jsonify({'error': f'Error al añadir el país: {e}'}), 500
+
+# Editar Pais
+
+@app.route('/pais/<int:id>', methods=['PUT'])
+@jwt_required()
+def edit_pais(id):
+    current_user_id = get_jwt_identity()
+    
+    # Verificar si el usuario actual es superadmin
+    cursor = db.database.cursor(dictionary=True)
+    cursor.execute("SELECT id_rol FROM users WHERE id_perfilUsuario = %s", (current_user_id,))
+    role_data = cursor.fetchone()
+    
+    superadmin_id = get_role_id('superadmin')
+    if role_data['id_rol'] != superadmin_id:
+        return jsonify({'error': 'No autorizado'}), 403
+
+    data = request.get_json()
+    nombre = data.get('nombre')
+    capital = data.get('capital')
+
+    if not nombre and not capital:
+        return jsonify({'error': 'Al menos un campo (nombre o capital) debe ser actualizado.'}), 400
+
+    updates = []
+    params = []
+
+    if nombre:
+        updates.append("nombre = %s")
+        params.append(nombre)
+    if capital:
+        updates.append("capital = %s")
+        params.append(capital)
+
+    params.append(id)
+    update_query = f"UPDATE pais SET {', '.join(updates)} WHERE id_pais = %s"
+
+    try:
+        cursor = db.database.cursor()
+        cursor.execute(update_query, tuple(params))
+        db.database.commit()
+        if cursor.rowcount == 0:
+            return jsonify({'error': 'País no encontrado'}), 404
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        return jsonify({'error': f'Error al actualizar los detalles del país: {e}'}), 500
+
+# Eliminar Pais
+
+@app.route('/pais/<int:id>', methods=['DELETE'])
+@jwt_required()
+def delete_pais(id):
+    current_user_id = get_jwt_identity()
+    
+    # Verificar si el usuario actual es superadmin
+    cursor = db.database.cursor(dictionary=True)
+    cursor.execute("SELECT id_rol FROM users WHERE id_perfilUsuario = %s", (current_user_id,))
+    role_data = cursor.fetchone()
+    
+    superadmin_id = get_rol_id('superadmin')
+    if role_data['id_rol'] != superadmin_id:
+        return jsonify({'error': 'No autorizado'}), 403
+
+    try:
+        # Verificar si existen ciudades asociadas al país
+        cursor.execute("""
+            SELECT COUNT(*) AS count 
+            FROM ciudad c 
+            JOIN urbanizacion u ON c.id_ciudad = u.id_ciudad 
+            WHERE c.id_pais = %s
+        """, (id,))
+        count_data = cursor.fetchone()
+        if count_data['count'] > 0:
+            return jsonify({'error': 'No se pueden eliminar países en los que existen ciudades con urbanizaciones'}), 400
+
+        # Verificar si existen ciudades sin urbanizaciones
+        cursor.execute("SELECT COUNT(*) AS count FROM ciudad WHERE id_pais = %s", (id,))
+        count_data = cursor.fetchone()
+        if count_data['count'] > 0:
+            return jsonify({'error': 'No se pueden eliminar países en los que existen ciudades'}), 400
+
+        # Eliminar el país
+        cursor.execute("DELETE FROM pais WHERE id_pais = %s", (id,))
+        db.database.commit()
+        if cursor.rowcount == 0:
+            return jsonify({'error': 'País no encontrado'}), 404
+        return jsonify({'success': 'País eliminado exitosamente'}), 200
+    except Exception as e:
+        return jsonify({'error': f'Error al eliminar el país: {e}'}), 500
+    
+
+# ----------------------------------------------------------------------------------------------------
+# CIUDAD
+# ----------------------------------------------------------------------------------------------------
+
+
+# Obtener Datos Ciudad
+
+@app.route('/ciudad/<int:id>', methods=['GET'])
+@jwt_required()
+def get_ciudad(id):
+    current_user_id = get_jwt_identity()
+    
+    # Verificar si el usuario actual es superadmin
+    cursor = db.database.cursor(dictionary=True)
+    cursor.execute("SELECT id_rol FROM users WHERE id_perfilUsuario = %s", (current_user_id,))
+    role_data = cursor.fetchone()
+    
+    superadmin_id = get_rol_id('superadmin')
+    if role_data['id_rol'] != superadmin_id:
+        return jsonify({'error': 'No autorizado'}), 403
+
+    try:
+        cursor.execute("SELECT * FROM ciudad WHERE id_ciudad = %s", (id,))
+        ciudad = cursor.fetchone()
+        if not ciudad:
+            return jsonify({'error': 'Ciudad no encontrada'}), 404
+        return jsonify(ciudad), 200
+    except Exception as e:
+        return jsonify({'error': f'Error al obtener los datos de la ciudad: {e}'}), 500
+
+# Listar ciudades
+
+@app.route('/ciudades', methods=['GET'])
+@jwt_required()
+def get_ciudades():
+    current_user_id = get_jwt_identity()
+    
+    # Verificar si el usuario actual es superadmin
+    cursor = db.database.cursor(dictionary=True)
+    cursor.execute("SELECT id_rol FROM users WHERE id_perfilUsuario = %s", (current_user_id,))
+    role_data = cursor.fetchone()
+    
+    superadmin_id = get_role_id('superadmin')
+    if role_data['id_rol'] != superadmin_id:
+        return jsonify({'error': 'No autorizado'}), 403
+
+    try:
+        cursor = db.database.cursor(dictionary=True)
+        query = """
+            SELECT DISTINCT c.id_ciudad, c.nombre, c.id_pais
+            FROM ciudad c
+            JOIN urbanizacion u ON c.id_ciudad = u.id_ciudad
+        """
+        cursor.execute(query)
+        ciudades = cursor.fetchall()
+        return jsonify(ciudades), 200
+    except Exception as e:
+        return jsonify({'error': f'Error al obtener las ciudades: {e}'}), 500
+
+# Añadir Ciudad
+
+@app.route('/add_ciudad', methods=['POST'])
+@jwt_required()
+def add_ciudad():
+    current_user_id = get_jwt_identity()
+    
+    # Verificar si el usuario actual es superadmin
+    cursor = db.database.cursor(dictionary=True)
+    cursor.execute("SELECT id_rol FROM users WHERE id_perfilUsuario = %s", (current_user_id,))
+    role_data = cursor.fetchone()
+    
+    superadmin_id = get_role_id('superadmin')
+    if role_data['id_rol'] != superadmin_id:
+        return jsonify({'error': 'No autorizado'}), 403
+
+    data = request.get_json()
+    nombre = data.get('nombre')
+    id_pais = data.get('id_pais')
+
+    if not nombre or not id_pais:
+        return jsonify({'error': 'Faltan datos'}), 400
+
+    try:
+        cursor = db.database.cursor()
+        cursor.execute("""
+            INSERT INTO ciudad (nombre, id_pais) 
+            VALUES (%s, %s)
+        """, (nombre, id_pais))
+        db.database.commit()
+        return jsonify({'success': 'Ciudad añadida exitosamente'}), 201
+    except Exception as e:
+        db.database.rollback()
+        return jsonify({'error': f'Error al añadir la ciudad: {e}'}), 500
+
+# Editar Ciudad
+
+@app.route('/ciudad/<int:id>', methods=['PUT'])
+@jwt_required()
+def edit_ciudad(id):
+    current_user_id = get_jwt_identity()
+    
+    # Verificar si el usuario actual es superadmin
+    cursor = db.database.cursor(dictionary=True)
+    cursor.execute("SELECT id_rol FROM users WHERE id_perfilUsuario = %s", (current_user_id,))
+    role_data = cursor.fetchone()
+    
+    superadmin_id = get_rol_id('superadmin')
+    if role_data['id_rol'] != superadmin_id:
+        return jsonify({'error': 'No autorizado'}), 403
+
+    data = request.get_json()
+    nombre = data.get('nombre')
+    id_pais = data.get('id_pais')
+
+    if not nombre and not id_pais:
+        return jsonify({'error': 'Al menos un campo debe ser proporcionado'}), 400
+
+    updates = []
+    params = []
+
+    if nombre:
+        updates.append("nombre = %s")
+        params.append(nombre)
+    if id_pais:
+        updates.append("id_pais = %s")
+        params.append(id_pais)
+
+    params.append(id)
+    update_query = f"UPDATE ciudad SET {', '.join(updates)} WHERE id_ciudad = %s"
+
+    try:
+        cursor = db.database.cursor()
+        cursor.execute(update_query, tuple(params))
+        db.database.commit()
+        if cursor.rowcount == 0:
+            return jsonify({'error': 'Ciudad no encontrada'}), 404
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        return jsonify({'error': f'Error al actualizar los datos de la ciudad: {e}'}), 500
+
+
+# Eliminar Ciudad
+
+@app.route('/ciudad/<int:id>', methods=['DELETE'])
+@jwt_required()
+def delete_ciudad(id):
+    current_user_id = get_jwt_identity()
+    
+    # Verificar si el usuario actual es superadmin
+    cursor = db.database.cursor(dictionary=True)
+    cursor.execute("SELECT id_rol FROM users WHERE id_perfilUsuario = %s", (current_user_id,))
+    role_data = cursor.fetchone()
+    
+    superadmin_id = get_rol_id('superadmin')
+    if role_data['id_rol'] != superadmin_id:
+        return jsonify({'error': 'No autorizado'}), 403
+
+    try:
+        # Verificar si existen urbanizaciones asociadas a la ciudad
+        cursor.execute("SELECT COUNT(*) AS count FROM urbanizacion WHERE id_ciudad = %s", (id,))
+        count_data = cursor.fetchone()
+        if count_data['count'] > 0:
+            return jsonify({'error': 'No se pueden eliminar ciudades en las que existen urbanizaciones.'}), 400
+        
+        # Eliminar la ciudad
+        cursor.execute("DELETE FROM ciudad WHERE id_ciudad = %s", (id,))
+        db.database.commit()
+        if cursor.rowcount == 0:
+            return jsonify({'error': 'Ciudad no encontrada'}), 404
+        return jsonify({'success': 'Ciudad eliminada exitosamente'}), 200
+    except Exception as e:
+        return jsonify({'error': f'Error al eliminar la ciudad: {e}'}), 500
+    
 
 # ----------------------------------------------------------------------------------------------------
 # --------------------------------------- LANZAR APLICACION -----------------------------------------
