@@ -15,9 +15,13 @@ app = Flask(__name__, template_folder=template_dir)
 CORS(app, supports_credentials=True)
 
 # Configuraciones de JWT
-app.config['JWT_SECRET_KEY'] = os.environ.get('SECRET_KEY', 'urba')  # Clave secreta para JWT
+app.config['JWT_SECRET_KEY'] = os.environ.get('SECRET_KEY', 'urba') 
 jwt = JWTManager(app)
 
+#Carpeta Manejar archivos (logos)
+UPLOAD_FOLDER = 'uploads'
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
 
 # ----------------------------------------------------------------------------------------------------
@@ -175,7 +179,7 @@ def login():
         return jsonify({'error': 'Error de conexión con la base de datos'}), 500
 
     if user and check_password_hash(user['password'], contrasena):
-        access_token = create_access_token(identity=user['user_id'])
+        access_token = create_access_token(identity=user['user_id'], expires_delta=None)
         response_data = {
             "access_token": access_token,
             "user": {
@@ -845,50 +849,40 @@ def add_urbanizacion():
     superadmin_id = get_rol_id('superadmin')
     if role_data['id_rol'] != superadmin_id:
         return jsonify({'error': 'No autorizado'}), 403
-    
-    data = request.get_json()
-    nombre_urbanizacion = data.get('nombre')
-    cif = data.get('cif')
-    direccion = data.get('direccion')
-    cod_postal = data.get('cod_postal')
-    nombre_ciudad = data.get('nombre_ciudad')
-    nombre_pais = data.get('nombre_pais')
-    capital_pais = data.get('capital_pais')
-    url_logo = data.get('url_logo')
 
-    if not all([nombre_urbanizacion, cif, direccion, cod_postal, nombre_ciudad, nombre_pais, capital_pais]):
+    nombre_urbanizacion = request.form.get('nombre')
+    cif = request.form.get('cif')
+    direccion = request.form.get('direccion')
+    cod_postal = request.form.get('cod_postal')
+    id_ciudad = request.form.get('id_ciudad')
+    logo = request.files.get('logo')
+
+    if not all([nombre_urbanizacion, cif, direccion, cod_postal, id_ciudad]):
         return jsonify({'error': 'Faltan datos'}), 400
 
     try:
-        # Verificar si el país existe, si no, agregarlo
-        cursor.execute("SELECT id_pais FROM pais WHERE nombre = %s", (nombre_pais,))
-        pais_data = cursor.fetchone()
-        if pais_data:
-            id_pais = pais_data['id_pais']
+        # Guardar el archivo de logo si existe
+        logo_path = None
+        if logo:
+            logo_filename = secure_filename(logo.filename)
+            logo_path = os.path.join(UPLOAD_FOLDER, logo_filename)
+            print(f"Archivo guardado en {logo_path}")
+            logo.save(logo_path)
         else:
-            cursor.execute("INSERT INTO pais (nombre, capital) VALUES (%s, %s)", (nombre_pais, capital_pais))
-            db.database.commit()
-            id_pais = cursor.lastrowid
+            print("No se ha subido ningún archivo")
 
-        # Verificar si la ciudad existe, si no, agregarla
-        cursor.execute("SELECT id_ciudad FROM ciudad WHERE nombre = %s AND id_pais = %s", (nombre_ciudad, id_pais))
-        ciudad_data = cursor.fetchone()
-        if ciudad_data:
-            id_ciudad = ciudad_data['id_ciudad']
-        else:
-            cursor.execute("INSERT INTO ciudad (nombre, id_pais) VALUES (%s, %s)", (nombre_ciudad, id_pais))
-            db.database.commit()
-            id_ciudad = cursor.lastrowid
-
-        # Agregar la nueva urbanización
+        # Añadir urbanización
         cursor.execute("""
             INSERT INTO urbanizacion (nombre, cif, direccion, cod_postal, url_logo, id_ciudad) 
             VALUES (%s, %s, %s, %s, %s, %s)
-        """, (nombre_urbanizacion, cif, direccion, cod_postal, url_logo, id_ciudad))
+        """, (nombre_urbanizacion, cif, direccion, cod_postal, logo_path, id_ciudad))
         db.database.commit()
         return jsonify({'success': True}), 201
     except Exception as e:
         return jsonify({'error': f'Error al registrar la urbanización: {e}'}), 500
+
+def secure_filename(filename):
+    return filename
 
 
 # ----------------------------------------------------------------------------------------------------
@@ -913,10 +907,8 @@ def get_paises():
 
     try:
         cursor.execute("""
-            SELECT DISTINCT p.id_pais, p.nombre, p.capital
-            FROM pais p
-            JOIN ciudad c ON p.id_pais = c.id_pais
-            JOIN urbanizacion u ON c.id_ciudad = u.id_ciudad
+            SELECT DISTINCT id_pais, nombre, capital
+            FROM pais
         """)
         paises = cursor.fetchall()
         return jsonify(paises), 200
@@ -1122,15 +1114,15 @@ def get_ciudades():
     try:
         cursor = db.database.cursor(dictionary=True)
         query = """
-            SELECT DISTINCT c.id_ciudad, c.nombre, c.id_pais
-            FROM ciudad c
-            JOIN urbanizacion u ON c.id_ciudad = u.id_ciudad
+            SELECT DISTINCT id_ciudad, nombre, id_pais
+            FROM ciudad
         """
         cursor.execute(query)
         ciudades = cursor.fetchall()
         return jsonify(ciudades), 200
     except Exception as e:
         return jsonify({'error': f'Error al obtener las ciudades: {e}'}), 500
+
 
 # Añadir Ciudad
 
