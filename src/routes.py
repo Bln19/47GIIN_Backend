@@ -1,4 +1,5 @@
 from flask import jsonify, request, render_template
+from flask_cors import cross_origin
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token
 from werkzeug.security import check_password_hash, generate_password_hash
 from .models import db, User, Rol, Permiso, Urbanizacion
@@ -13,6 +14,7 @@ def register_routes(app):
 
     # LOGIN
     @app.route('/login', methods=['POST'])
+    @cross_origin()
     def login():
         if not request.is_json:
             return jsonify({'error': 'El cuerpo de la petición no es JSON válido'}), 400
@@ -81,8 +83,10 @@ def register_routes(app):
         
         
     # REGISTRO - Propietario y Empleado
+
     @app.route('/register', methods=['POST'])
     @jwt_required()
+    @cross_origin()
     def register():
         current_user_id = get_jwt_identity()
         print(f"Current User ID: {current_user_id}")
@@ -156,8 +160,10 @@ def register_routes(app):
     
     
     # REGISTRO - Admin
+
     @app.route('/register_admin', methods=['POST'])
     @jwt_required()
+    @cross_origin()
     def register_admin():
         current_user_id = get_jwt_identity()
         connection = get_db_connection()
@@ -214,8 +220,10 @@ def register_routes(app):
     
 
     # REGISTRO - Superadmin
+
     @app.route('/register_superadmin', methods=['POST'])
     @jwt_required()
+    @cross_origin()
     def register_superadmin():
         current_user_id = get_jwt_identity()
         connection = get_db_connection()
@@ -266,10 +274,12 @@ def register_routes(app):
         connection.close()
         return jsonify({'success': True}), 201
 
+    
     # PROPIETARIOS
     
     @app.route('/propietarios', methods=['GET'])
     @jwt_required()
+    @cross_origin()
     def get_propietarios():
         current_user_id = get_jwt_identity()
         connection = get_db_connection()
@@ -297,6 +307,7 @@ def register_routes(app):
 
     @app.route('/propietarios/<int:id>', methods=['GET'])
     @jwt_required()
+    @cross_origin()
     def get_propietario(id):
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
@@ -318,6 +329,7 @@ def register_routes(app):
 
     @app.route('/propietarios/<int:id>', methods=['PUT'])
     @jwt_required()
+    @cross_origin()
     def update_propietario(id):
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
@@ -352,6 +364,7 @@ def register_routes(app):
 
     @app.route('/propietarios/<int:id>', methods=['DELETE'])
     @jwt_required()
+    @cross_origin()
     def delete_propietario(id):
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
@@ -365,8 +378,10 @@ def register_routes(app):
         return jsonify({'success': True}), 200
 
     # EMPLEADOS
+    
     @app.route('/empleados', methods=['GET'])
     @jwt_required()
+    @cross_origin()
     def get_empleados():
         current_user_id = get_jwt_identity()
         connection = get_db_connection()
@@ -398,6 +413,7 @@ def register_routes(app):
 
     @app.route('/empleados/<int:id>', methods=['GET'])
     @jwt_required()
+    @cross_origin()
     def get_empleado(id):
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
@@ -419,6 +435,7 @@ def register_routes(app):
 
     @app.route('/empleados/<int:id>', methods=['PUT'])
     @jwt_required()
+    @cross_origin()
     def update_empleado(id):
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
@@ -453,6 +470,7 @@ def register_routes(app):
 
     @app.route('/empleados/<int:id>', methods=['DELETE'])
     @jwt_required()
+    @cross_origin()
     def delete_empleado(id):
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
@@ -466,8 +484,10 @@ def register_routes(app):
         return jsonify({'success': True}), 200
 
     # ROLES
+
     @app.route('/roles/all', methods=['GET'])
     @jwt_required()
+    @cross_origin()
     def get_all_roles():
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
@@ -481,6 +501,7 @@ def register_routes(app):
 
     @app.route('/roles', methods=['GET'])
     @jwt_required()
+    @cross_origin()
     def get_roles():
         current_user_id = get_jwt_identity()
         connection = get_db_connection()
@@ -510,6 +531,7 @@ def register_routes(app):
 
     @app.route('/roles/<int:id>', methods=['GET'])
     @jwt_required()
+    @cross_origin()
     def get_rol(id):
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
@@ -534,6 +556,7 @@ def register_routes(app):
 
     @app.route('/roles', methods=['POST'])
     @jwt_required()
+    @cross_origin()
     def add_rol():
         current_user_id = get_jwt_identity()
         data = request.get_json()
@@ -577,6 +600,7 @@ def register_routes(app):
 
     @app.route('/roles/<int:id>', methods=['PUT'])
     @jwt_required()
+    @cross_origin()
     def update_rol(id):
         current_user_id = get_jwt_identity()
         data = request.get_json()
@@ -616,6 +640,7 @@ def register_routes(app):
 
     @app.route('/roles/<int:rol_id>', methods=['DELETE'])
     @jwt_required()
+    @cross_origin()
     def delete_rol(rol_id):
         current_user_id = get_jwt_identity()
         connection = get_db_connection()
@@ -660,9 +685,12 @@ def register_routes(app):
             connection.close()
             return jsonify({'error': 'Error al eliminar el rol'}), 500
 
+
     # PERMISOS
+
     @app.route('/permisos', methods=['GET'])
     @jwt_required()
+    @cross_origin()
     def get_all_permisos():
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
@@ -685,6 +713,7 @@ def register_routes(app):
 
     @app.route('/permisos/<int:id>', methods=['GET'])
     @jwt_required()
+    @cross_origin()
     def get_permiso(id):
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
@@ -720,6 +749,7 @@ def register_routes(app):
 
     @app.route('/permisos/<int:id>', methods=['PUT'])
     @jwt_required()
+    @cross_origin()
     def update_permiso(id):
         current_user_id = get_jwt_identity()
         data = request.get_json()
@@ -778,6 +808,7 @@ def register_routes(app):
 
     @app.route('/roles/<int:id>/permisos', methods=['GET'])
     @jwt_required()
+    @cross_origin()
     def get_permisos_by_rol(id):
         current_user_id = get_jwt_identity()
         connection = get_db_connection()
@@ -815,6 +846,7 @@ def register_routes(app):
 
     @app.route('/permisos', methods=['POST'])
     @jwt_required()
+    @cross_origin()
     def add_permiso():
         current_user_id = get_jwt_identity()
         data = request.get_json()
@@ -870,6 +902,7 @@ def register_routes(app):
 
     @app.route('/permisos/<int:permiso_id>', methods=['DELETE'])
     @jwt_required()
+    @cross_origin()
     def delete_permiso(permiso_id):
         current_user_id = get_jwt_identity()
         connection = get_db_connection()
@@ -907,8 +940,34 @@ def register_routes(app):
             return jsonify({'error': 'Error al eliminar el permiso'}), 500
 
     # URBANIZACION
+
+    # Obtener Urbanizaciones
+
+    @app.route('/urbanizaciones', methods=['GET'])
+    @jwt_required()
+    @cross_origin()
+    def get_urbanizaciones():
+        current_user_id = get_jwt_identity()
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+
+        try:
+            cursor.execute("SELECT * FROM urbanizacion")
+            urbanizaciones = cursor.fetchall()
+            
+            cursor.close()
+            connection.close()
+            return jsonify(urbanizaciones), 200
+        except Exception as e:
+            cursor.close()
+            connection.close()
+            return jsonify({'error': f'Error al obtener las urbanizaciones: {e}'}), 500
+
+    # Obtener Urbanizacion por Id
+
     @app.route('/urbanizacion/<int:id>', methods=['GET'])
     @jwt_required()
+    @cross_origin()
     def get_urbanizacion(id):
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
@@ -929,8 +988,12 @@ def register_routes(app):
             connection.close()
             return jsonify({'error': 'Error de conexión con la base de datos'}), 500
 
+    
+    #Añadir Urbanizacion 
+
     @app.route('/register_urbanizacion', methods=['POST'])
     @jwt_required()
+    @cross_origin()
     def add_urbanizacion():
         current_user_id = get_jwt_identity()
         connection = get_db_connection()
@@ -987,9 +1050,87 @@ def register_routes(app):
     def secure_filename(filename):
         return filename
 
+    #Añadir Urbanizacion
+    
+    @app.route('/urbanizacion/<int:id>', methods=['PUT'])
+    @jwt_required()
+    @cross_origin()
+    def edit_urbanizacion(id):
+        current_user_id = get_jwt_identity()
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+
+        # Verificar si el usuario actual es superadmin
+        cursor.execute("SELECT id_rol FROM user WHERE id_perfilUsuario = %s", (current_user_id,))
+        role_data = cursor.fetchone()
+        if not role_data:
+            cursor.close()
+            connection.close()
+            return jsonify({'error': 'Error al cargar role_data'}), 404
+        
+        superadmin_id = get_role_id('superadmin')
+        if role_data['id_rol'] != superadmin_id:
+            cursor.close()
+            connection.close()
+            return jsonify({'error': 'No autorizado'}), 403
+
+        data = request.get_json()
+        nombre = data.get('nombre')
+        cif = data.get('cif')
+        direccion = data.get('direccion')
+        cod_postal = data.get('cod_postal')
+        id_ciudad = data.get('id_ciudad')
+        logo = data.get('logo')
+
+        updates = []
+        params = []
+
+        if nombre:
+            updates.append("nombre = %s")
+            params.append(nombre)
+        if cif:
+            updates.append("cif = %s")
+            params.append(cif)
+        if direccion:
+            updates.append("direccion = %s")
+            params.append(direccion)
+        if cod_postal:
+            updates.append("cod_postal = %s")
+            params.append(cod_postal)
+        if id_ciudad:
+            updates.append("id_ciudad = %s")
+            params.append(id_ciudad)
+        if logo:
+            updates.append("url_logo = %s")
+            params.append(logo)
+
+        if not updates:
+            cursor.close()
+            connection.close()
+            return jsonify({'error': 'No se han proporcionado datos para actualizar'}), 400
+
+        params.append(id)
+        update_query = f"UPDATE urbanizacion SET {', '.join(updates)} WHERE id_urbanizacion = %s"
+
+        try:
+            cursor.execute(update_query, tuple(params))
+            connection.commit()
+            
+            cursor.close()
+            connection.close()
+            if cursor.rowcount == 0:
+                return jsonify({'error': 'Urbanización no encontrada'}), 404
+            return jsonify({'success': 'Urbanización actualizada exitosamente'}), 200
+        except Exception as e:
+            cursor.close()
+            connection.close()
+            return jsonify({'error': f'Error al actualizar la urbanización: {e}'}), 500
+    
     # PAIS
+
     @app.route('/paises', methods=['GET'])
     @jwt_required()
+    @cross_origin()
     def get_paises():
         current_user_id = get_jwt_identity()
         connection = get_db_connection()
@@ -1026,6 +1167,7 @@ def register_routes(app):
 
     @app.route('/pais/<int:id>', methods=['GET'])
     @jwt_required()
+    @cross_origin()
     def get_pais(id):
         current_user_id = get_jwt_identity()
         connection = get_db_connection()
@@ -1061,6 +1203,7 @@ def register_routes(app):
 
     @app.route('/paises', methods=['POST'])
     @jwt_required()
+    @cross_origin()
     def add_pais():
         current_user_id = get_jwt_identity()
         connection = get_db_connection()
@@ -1107,6 +1250,7 @@ def register_routes(app):
 
     @app.route('/pais/<int:id>', methods=['PUT'])
     @jwt_required()
+    @cross_origin()
     def edit_pais(id):
         current_user_id = get_jwt_identity()
         connection = get_db_connection()
@@ -1164,6 +1308,7 @@ def register_routes(app):
 
     @app.route('/pais/<int:id>', methods=['DELETE'])
     @jwt_required()
+    @cross_origin()
     def delete_pais(id):
         current_user_id = get_jwt_identity()
         connection = get_db_connection()
@@ -1225,6 +1370,7 @@ def register_routes(app):
     #Obtener ciudad por id
     @app.route('/ciudad/<int:id>', methods=['GET'])
     @jwt_required()
+    @cross_origin()
     def get_ciudad(id):
         current_user_id = get_jwt_identity()
         connection = get_db_connection()
@@ -1262,6 +1408,7 @@ def register_routes(app):
     #Obtener ciudades
     @app.route('/ciudades', methods=['GET'])
     @jwt_required()
+    @cross_origin()
     def get_ciudades():
         current_user_id = get_jwt_identity()
         connection = get_db_connection()
@@ -1300,6 +1447,7 @@ def register_routes(app):
     #Añadir ciudades
     @app.route('/add_ciudad', methods=['POST'])
     @jwt_required()
+    @cross_origin()
     def add_ciudad():
         current_user_id = get_jwt_identity()
         connection = get_db_connection()
@@ -1346,6 +1494,7 @@ def register_routes(app):
 
     @app.route('/ciudad/<int:id>', methods=['PUT'])
     @jwt_required()
+    @cross_origin()
     def edit_ciudad(id):
         current_user_id = get_jwt_identity()
         connection = get_db_connection()
@@ -1403,6 +1552,7 @@ def register_routes(app):
 
     @app.route('/ciudad/<int:id>', methods=['DELETE'])
     @jwt_required()
+    @cross_origin()
     def delete_ciudad(id):
         current_user_id = get_jwt_identity()
         connection = get_db_connection()
