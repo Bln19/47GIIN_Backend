@@ -4,8 +4,9 @@ from werkzeug.security import generate_password_hash
 def create_initial_superadmin():
 
     database = mysql.connector.connect(
-        host='localhost',
+        host="172.20.0.3",
         user='root',
+        password="1234",
         database='47urblapaz'
     )
 
@@ -20,6 +21,7 @@ def create_initial_superadmin():
     email = 'admin01@example.com'
 
     hashed_password = generate_password_hash(plain_password)
+    print(f"contraseña {hashed_password} creado ")
 
     cursor.execute("SELECT id_rol FROM rol WHERE nombre = %s", ('superadmin',))
     role_data = cursor.fetchone()
@@ -32,7 +34,7 @@ def create_initial_superadmin():
     try:
 
         cursor.execute("""
-            INSERT INTO users (nombreUsuario, contrasena, id_rol, nombre, apellidos, telefono, email) 
+            INSERT INTO user (nombreUsuario, contrasena, id_rol, nombre, apellidos, telefono, email) 
             VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (username, hashed_password, superadmin_id, nombre, apellidos, telefono, email))
         database.commit()
