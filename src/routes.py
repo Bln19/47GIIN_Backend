@@ -1050,7 +1050,7 @@ def register_routes(app):
     def secure_filename(filename):
         return filename
 
-    #Añadir Urbanizacion
+    #Editar Urbanizacion
     
     @app.route('/urbanizacion/<int:id>', methods=['PUT'])
     @jwt_required()
@@ -1074,13 +1074,13 @@ def register_routes(app):
             connection.close()
             return jsonify({'error': 'No autorizado'}), 403
 
-        data = request.get_json()
-        nombre = data.get('nombre')
-        cif = data.get('cif')
-        direccion = data.get('direccion')
-        cod_postal = data.get('cod_postal')
-        id_ciudad = data.get('id_ciudad')
-        logo = data.get('logo')
+        #Obtener los datos del formulario
+        nombre = request.form.get('nombre')
+        cif = request.form.get('cif')
+        direccion = request.form.get('direccion')
+        cod_postal = request.form.get('cod_postal')
+        id_ciudad = request.form.get('id_ciudad')
+        logo = request.files.get('logo')
 
         updates = []
         params = []
@@ -1101,8 +1101,11 @@ def register_routes(app):
             updates.append("id_ciudad = %s")
             params.append(id_ciudad)
         if logo:
+            logo_filename = secure_filename(logo.filename)
+            logo_path = os.path.join(app.config['UPLOAD_FOLDER'], logo_filename)
+            logo.save(logo_path)
             updates.append("url_logo = %s")
-            params.append(logo)
+            params.append(logo_path)
 
         if not updates:
             cursor.close()
