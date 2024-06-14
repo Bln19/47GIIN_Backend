@@ -1129,6 +1129,45 @@ def register_routes(app):
             connection.close()
             return jsonify({'error': f'Error al actualizar la urbanización: {e}'}), 500
     
+    #Eliminar Urbanizacion
+
+    @app.route('/urbanizacion/<int:id>', methods=['DELETE'])
+    @jwt_required()
+    @cross_origin()
+    def delete_urbanizacion(id):
+        current_user_id = get_jwt_identity()
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+
+        # Verificar si el usuario actual es superadmin
+        cursor.execute("SELECT id_rol FROM user WHERE id_perfilUsuario = %s", (current_user_id,))
+        role_data = cursor.fetchone()
+        if not role_data:
+            cursor.close()
+            connection.close()
+            return jsonify({'error': 'Error al cargar role_data'}), 404
+
+        superadmin_id = get_role_id('superadmin')
+        if role_data['id_rol'] != superadmin_id:
+            cursor.close()
+            connection.close()
+            return jsonify({'error': 'No autorizado'}), 403
+
+        try:
+            # Eliminar la urbanización
+            cursor.execute("DELETE FROM urbanizacion WHERE id_urbanizacion = %s", (id,))
+            connection.commit()
+            
+            cursor.close()
+            connection.close()
+            if cursor.rowcount == 0:
+                return jsonify({'error': 'Urbanización no encontrada'}), 404
+            return jsonify({'success': 'Urbanización eliminada exitosamente'}), 200
+        except Exception as e:
+            cursor.close()
+            connection.close()
+            return jsonify({'error': f'Error al eliminar la urbanización: {e}'}), 500
+
     # PAIS
 
     @app.route('/paises', methods=['GET'])
