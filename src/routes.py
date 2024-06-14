@@ -1503,7 +1503,6 @@ def register_routes(app):
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
 
-        # Verificar si el usuario actual es superadmin
         cursor.execute("SELECT id_rol FROM user WHERE id_perfilUsuario = %s", (current_user_id,))
         role_data = cursor.fetchone()
         if not role_data:
@@ -1552,6 +1551,7 @@ def register_routes(app):
             cursor.close()
             connection.close()
             return jsonify({'error': f'Error al actualizar los datos de la ciudad: {e}'}), 500
+
 
     @app.route('/ciudad/<int:id>', methods=['DELETE'])
     @jwt_required()
