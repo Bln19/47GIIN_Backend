@@ -1,18 +1,27 @@
-from flask import jsonify, request, render_template
+from flask import jsonify, request, render_template, send_file
 from flask_cors import cross_origin
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token
 from werkzeug.security import check_password_hash, generate_password_hash
 from .models import db, User, Rol, Permiso, Urbanizacion
-from .helpers import get_db_connection, get_role_id
-import os
+from .helpers import get_db_connection, get_role_id, generar_reporte_pdf
+import os, io
+
 
 def register_routes(app):
-    # RUTA PRINCIPAL
+    #------------------------------------------------------------------------------------------------------------------------------------------
+    # ------------------------------------------------------- RUTA PRINCIPAL ------------------------------------------------------------------
+    #------------------------------------------------------------------------------------------------------------------------------------------
+
+
     @app.route('/')
     def home():
         return render_template('index.html')
 
-    # LOGIN
+
+    #------------------------------------------------------------------------------------------------------------------------------------------
+    #----------------------------------------------------------- LOGIN ------------------------------------------------------------------------
+    #------------------------------------------------------------------------------------------------------------------------------------------
+
     @app.route('/login', methods=['POST'])
     @cross_origin()
     def login():
@@ -51,7 +60,7 @@ def register_routes(app):
 
         if user and check_password_hash(user['password'], contrasena):
             user_role = user['role']
-            print(f"User Role: {user_role}")  # Depuración
+            print(f"User Role: {user_role}")
             access_token = create_access_token(identity=user['user_id'], expires_delta=None)
             response_data = {
                 "access_token": access_token,
@@ -80,8 +89,13 @@ def register_routes(app):
             cursor.close()
             connection.close()
             return jsonify({"error": "Usuario no encontrado o contraseña incorrecta"}), 401
-        
-        
+
+
+    #------------------------------------------------------------------------------------------------------------------------------------------    
+    #--------------------------------------------------------- REGISTRO -----------------------------------------------------------------------
+    #------------------------------------------------------------------------------------------------------------------------------------------
+
+
     # REGISTRO - Propietario y Empleado
 
     @app.route('/register', methods=['POST'])
@@ -111,7 +125,7 @@ def register_routes(app):
         # Obtener la urbanización del administrador
         cursor.execute("SELECT id_urbanizacion FROM user WHERE id_perfilUsuario = %s", (current_user_id,))
         urbanization_data = cursor.fetchone()
-        print(f"Urbanization Data: {urbanization_data}")  # Depuración
+        print(f"Urbanization Data: {urbanization_data}")
 
         if not urbanization_data or not urbanization_data['id_urbanizacion']:
             cursor.close()
@@ -119,7 +133,7 @@ def register_routes(app):
             return jsonify({'error': 'Urbanización no encontrada para el administrador'}), 404
 
         urbanization_id = urbanization_data['id_urbanizacion']
-        print(f"Urbanization ID: {urbanization_id}")  # Depuración
+        print(f"Urbanization ID: {urbanization_id}")
 
         data = request.get_json()
         username = data.get('username')
@@ -131,7 +145,7 @@ def register_routes(app):
         email = data.get('email')
 
         role_id = get_role_id(role)
-        print(f"Role ID: {role_id}")  # Depuración
+        print(f"Role ID: {role_id}")
 
         if not all([username, plain_password, role, nombre, apellidos, telefono, email]):
             cursor.close()
@@ -139,7 +153,7 @@ def register_routes(app):
             return jsonify({'error': 'Faltan datos para el registro'}), 400
 
         hashed_password = generate_password_hash(plain_password)
-        print(f"Hashed Password: {hashed_password}")  # Depuración
+        print(f"Hashed Password: {hashed_password}")
 
         try:
             cursor.execute("""
@@ -147,9 +161,9 @@ def register_routes(app):
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """, (username, hashed_password, role_id, urbanization_id, nombre, apellidos, telefono, email))
             connection.commit()
-            print("User registered successfully")  # Depuración
+            print("User registered successfully")
         except Exception as e:
-            print(f"Error al registrar el usuario: {e}")  # Depuración
+            print(f"Error al registrar el usuario: {e}")
             cursor.close()
             connection.close()
             return jsonify({'error': f'Error al registrar el usuario: {e}'}), 500
@@ -159,7 +173,7 @@ def register_routes(app):
         return jsonify({'success': True}), 201
     
     
-    # REGISTRO - Admin
+    # REGISTRO - Administrador
 
     @app.route('/register_admin', methods=['POST'])
     @jwt_required()
@@ -274,9 +288,13 @@ def register_routes(app):
         connection.close()
         return jsonify({'success': True}), 201
 
-    
-    # PROPIETARIOS
-    
+
+    #------------------------------------------------------------------------------------------------------------------------------------------    
+    #------------------------------------------------------ PROPIETARIOS ----------------------------------------------------------------------
+    #------------------------------------------------------------------------------------------------------------------------------------------    
+
+
+    #Obtener Propietarios  
     @app.route('/propietarios', methods=['GET'])
     @jwt_required()
     @cross_origin()
@@ -305,6 +323,10 @@ def register_routes(app):
         connection.close()
         return jsonify(propietarios), 200
 
+
+
+    #Obtener datos propietario por id
+
     @app.route('/propietarios/<int:id>', methods=['GET'])
     @jwt_required()
     @cross_origin()
@@ -326,6 +348,9 @@ def register_routes(app):
             return jsonify({'error': 'Propietario no encontrado'}), 404
         
         return jsonify(propietario), 200
+    
+
+    # Editar propietario
 
     @app.route('/propietarios/<int:id>', methods=['PUT'])
     @jwt_required()
@@ -362,6 +387,8 @@ def register_routes(app):
         connection.close()
         return jsonify({'success': True}), 200
 
+    #Eliminar propietario
+
     @app.route('/propietarios/<int:id>', methods=['DELETE'])
     @jwt_required()
     @cross_origin()
@@ -377,8 +404,13 @@ def register_routes(app):
         connection.close()
         return jsonify({'success': True}), 200
 
-    # EMPLEADOS
-    
+
+    #------------------------------------------------------------------------------------------------------------------------------------------    
+    #------------------------------------------------------- EMPLEADOS ------------------------------------------------------------------------
+    #------------------------------------------------------------------------------------------------------------------------------------------    
+
+    #Obtener empleados
+
     @app.route('/empleados', methods=['GET'])
     @jwt_required()
     @cross_origin()
@@ -411,6 +443,8 @@ def register_routes(app):
         return jsonify(empleados), 200
 
 
+    #Obtener empleado por id
+
     @app.route('/empleados/<int:id>', methods=['GET'])
     @jwt_required()
     @cross_origin()
@@ -432,6 +466,9 @@ def register_routes(app):
             return jsonify({'error': 'Empleado no encontrado'}), 404
         
         return jsonify(propietario), 200
+
+
+    #Editar empleado
 
     @app.route('/empleados/<int:id>', methods=['PUT'])
     @jwt_required()
@@ -468,6 +505,9 @@ def register_routes(app):
         connection.close()
         return jsonify({'success': True}), 200
 
+
+    #Eliminar empleado
+
     @app.route('/empleados/<int:id>', methods=['DELETE'])
     @jwt_required()
     @cross_origin()
@@ -483,7 +523,12 @@ def register_routes(app):
         connection.close()
         return jsonify({'success': True}), 200
 
-    # ROLES
+
+    #------------------------------------------------------------------------------------------------------------------------------------------    
+    #---------------------------------------------------------- ROLES -------------------------------------------------------------------------
+    #------------------------------------------------------------------------------------------------------------------------------------------    
+
+    #Obtener todos los roles
 
     @app.route('/roles/all', methods=['GET'])
     @jwt_required()
@@ -498,6 +543,9 @@ def register_routes(app):
         cursor.close()
         connection.close()
         return jsonify(roles), 200
+
+
+    #Obtener roles urbanizacion
 
     @app.route('/roles', methods=['GET'])
     @jwt_required()
@@ -554,6 +602,9 @@ def register_routes(app):
             connection.close()
             return jsonify({'error': 'Error de conexión con la base de datos'}), 500
 
+
+    #Añadir rol
+
     @app.route('/roles', methods=['POST'])
     @jwt_required()
     @cross_origin()
@@ -598,6 +649,9 @@ def register_routes(app):
             connection.close()
             return jsonify({'error': 'Error al crear el rol'}), 500
 
+
+    #Editar roles
+
     @app.route('/roles/<int:id>', methods=['PUT'])
     @jwt_required()
     @cross_origin()
@@ -637,6 +691,9 @@ def register_routes(app):
             cursor.close()
             connection.close()
             return jsonify({'error': 'Error al actualizar el rol'}), 500
+
+
+    #Eliminar rol
 
     @app.route('/roles/<int:rol_id>', methods=['DELETE'])
     @jwt_required()
@@ -685,8 +742,12 @@ def register_routes(app):
             connection.close()
             return jsonify({'error': 'Error al eliminar el rol'}), 500
 
+    #------------------------------------------------------------------------------------------------------------------------------------------    
+    #----------------------------------------------------- PERMISOS ---------------------------------------------------------------------------
+    #------------------------------------------------------------------------------------------------------------------------------------------    
 
-    # PERMISOS
+
+    #Obtener permisos
 
     @app.route('/permisos', methods=['GET'])
     @jwt_required()
@@ -710,6 +771,10 @@ def register_routes(app):
             cursor.close()
             connection.close()
             return jsonify({'error': 'Error de conexión con la base de datos'}), 500
+
+
+
+    #Obtener permiso por id permiso
 
     @app.route('/permisos/<int:id>', methods=['GET'])
     @jwt_required()
@@ -746,6 +811,112 @@ def register_routes(app):
             cursor.close()
             connection.close()
             return jsonify({'error': 'Error de conexión con la base de datos'}), 500
+
+
+
+    # Obtener permiso por id_rol
+    
+    @app.route('/roles/<int:id>/permisos', methods=['GET'])
+    @jwt_required()
+    @cross_origin()
+    def get_permisos_by_rol(id):
+        current_user_id = get_jwt_identity()
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+
+        try:
+            query = """
+                SELECT p.id_permiso, p.nombre, p.descripcion, r.nombre as rol_nombre
+                FROM permiso p
+                JOIN rol_permiso rp ON p.id_permiso = rp.id_permiso
+                JOIN rol r ON r.id_rol = rp.id_rol
+                WHERE rp.id_rol = %s
+            """
+            cursor.execute(query, (id,))
+            permisos = cursor.fetchall()
+
+            if not permisos:
+                cursor.close()
+                connection.close()
+                return jsonify({'error': 'No se encontraron permisos para el rol especificado'}), 404
+
+            rol_nombre = permisos[0]['rol_nombre'] if permisos else None
+            response = {
+                'permisos': permisos,
+                'rol_nombre': rol_nombre
+            }
+
+            cursor.close()
+            connection.close()
+            return jsonify(response), 200
+        except Exception as e:
+            cursor.close()
+            connection.close()
+            return jsonify({'error': 'Error de conexión con la base de datos'}), 500
+
+
+
+    # Añadir permiso
+
+    @app.route('/permisos', methods=['POST'])
+    @jwt_required()
+    @cross_origin()
+    def add_permiso():
+        current_user_id = get_jwt_identity()
+        data = request.get_json()
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+
+        nombre = data.get('nombre')
+        descripcion = data.get('descripcion')
+        roles = data.get('roles')
+
+        if not nombre or not descripcion or not roles:
+            cursor.close()
+            connection.close()
+            return jsonify({'error': 'Nombre, Descripción y Roles son requeridos'}), 400
+
+        try:
+            # Obtener la urbanización
+            cursor.execute("SELECT id_urbanizacion FROM user WHERE id_perfilUsuario = %s", (current_user_id,))
+            result = cursor.fetchone()
+            if result is None:
+                cursor.close()
+                connection.close()
+                return jsonify({'error': 'Urbanización no encontrada para el administrador'}), 404
+
+            urbanizacion_id = result.get('id_urbanizacion')
+
+            # Añadir nuevo permiso
+            insert_permiso_query = """
+                INSERT INTO permiso (nombre, descripcion) 
+                VALUES (%s, %s)
+            """
+            cursor.execute(insert_permiso_query, (nombre, descripcion))
+            permiso_id = cursor.lastrowid
+
+            # Asociar el permiso con los roles
+            insert_rol_permiso_query = """
+                INSERT INTO rol_permiso (id_rol, id_permiso)
+                VALUES (%s, %s)
+            """
+            for rol_id in roles:
+                cursor.execute(insert_rol_permiso_query, (rol_id, permiso_id))
+
+            connection.commit()
+
+            cursor.close()
+            connection.close()
+            return jsonify({'success': 'Permiso creado exitosamente', 'id_urbanizacion': urbanizacion_id}), 201
+        except Exception as e:
+            connection.rollback()
+            cursor.close()
+            connection.close()
+            return jsonify({'error': 'Error al crear el permiso'}), 500 
+    
+    
+    
+    # Editar permiso
 
     @app.route('/permisos/<int:id>', methods=['PUT'])
     @jwt_required()
@@ -806,99 +977,9 @@ def register_routes(app):
             connection.close()
             return jsonify({'error': 'Error de conexión con la base de datos'}), 500
 
-    @app.route('/roles/<int:id>/permisos', methods=['GET'])
-    @jwt_required()
-    @cross_origin()
-    def get_permisos_by_rol(id):
-        current_user_id = get_jwt_identity()
-        connection = get_db_connection()
-        cursor = connection.cursor(dictionary=True)
 
-        try:
-            query = """
-                SELECT p.id_permiso, p.nombre, p.descripcion, r.nombre as rol_nombre
-                FROM permiso p
-                JOIN rol_permiso rp ON p.id_permiso = rp.id_permiso
-                JOIN rol r ON r.id_rol = rp.id_rol
-                WHERE rp.id_rol = %s
-            """
-            cursor.execute(query, (id,))
-            permisos = cursor.fetchall()
 
-            if not permisos:
-                cursor.close()
-                connection.close()
-                return jsonify({'error': 'No se encontraron permisos para el rol especificado'}), 404
-
-            rol_nombre = permisos[0]['rol_nombre'] if permisos else None
-            response = {
-                'permisos': permisos,
-                'rol_nombre': rol_nombre
-            }
-
-            cursor.close()
-            connection.close()
-            return jsonify(response), 200
-        except Exception as e:
-            cursor.close()
-            connection.close()
-            return jsonify({'error': 'Error de conexión con la base de datos'}), 500
-
-    @app.route('/permisos', methods=['POST'])
-    @jwt_required()
-    @cross_origin()
-    def add_permiso():
-        current_user_id = get_jwt_identity()
-        data = request.get_json()
-        connection = get_db_connection()
-        cursor = connection.cursor(dictionary=True)
-
-        nombre = data.get('nombre')
-        descripcion = data.get('descripcion')
-        roles = data.get('roles')
-
-        if not nombre or not descripcion or not roles:
-            cursor.close()
-            connection.close()
-            return jsonify({'error': 'Nombre, Descripción y Roles son requeridos'}), 400
-
-        try:
-            # Obtener la urbanización
-            cursor.execute("SELECT id_urbanizacion FROM user WHERE id_perfilUsuario = %s", (current_user_id,))
-            result = cursor.fetchone()
-            if result is None:
-                cursor.close()
-                connection.close()
-                return jsonify({'error': 'Urbanización no encontrada para el administrador'}), 404
-
-            urbanizacion_id = result.get('id_urbanizacion')
-
-            # Añadir nuevo permiso
-            insert_permiso_query = """
-                INSERT INTO permiso (nombre, descripcion) 
-                VALUES (%s, %s)
-            """
-            cursor.execute(insert_permiso_query, (nombre, descripcion))
-            permiso_id = cursor.lastrowid
-
-            # Asociar el permiso con los roles
-            insert_rol_permiso_query = """
-                INSERT INTO rol_permiso (id_rol, id_permiso)
-                VALUES (%s, %s)
-            """
-            for rol_id in roles:
-                cursor.execute(insert_rol_permiso_query, (rol_id, permiso_id))
-
-            connection.commit()
-
-            cursor.close()
-            connection.close()
-            return jsonify({'success': 'Permiso creado exitosamente', 'id_urbanizacion': urbanizacion_id}), 201
-        except Exception as e:
-            connection.rollback()
-            cursor.close()
-            connection.close()
-            return jsonify({'error': 'Error al crear el permiso'}), 500
+    # Eliminar permiso
 
     @app.route('/permisos/<int:permiso_id>', methods=['DELETE'])
     @jwt_required()
@@ -938,8 +1019,13 @@ def register_routes(app):
             cursor.close()
             connection.close()
             return jsonify({'error': 'Error al eliminar el permiso'}), 500
+    
+    
 
-    # URBANIZACION
+    #------------------------------------------------------------------------------------------------------------------------------------------    
+    #--------------------------------------------------------- URBANIZACION -------------------------------------------------------------------
+    #------------------------------------------------------------------------------------------------------------------------------------------    
+
 
     # Obtener Urbanizaciones
 
@@ -962,6 +1048,8 @@ def register_routes(app):
             cursor.close()
             connection.close()
             return jsonify({'error': f'Error al obtener las urbanizaciones: {e}'}), 500
+
+
 
     # Obtener Urbanizacion por Id
 
@@ -988,7 +1076,55 @@ def register_routes(app):
             connection.close()
             return jsonify({'error': 'Error de conexión con la base de datos'}), 500
 
-    
+
+
+    #Obtener listado Urbanizaciones con nombre ciudad y pais para reporte
+
+    @app.route('/report/urbanizaciones', methods=['GET'])
+    @jwt_required()
+    def get_urbanizaciones_report():
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+        
+        query = """
+            SELECT 
+                u.id_urbanizacion, u.nombre, u.cif, u.direccion, u.cod_postal, c.nombre AS ciudad, p.nombre AS pais
+            FROM urbanizacion u
+            JOIN ciudad c ON u.id_ciudad = c.id_ciudad
+            JOIN pais p ON c.id_pais = p.id_pais
+            ORDER BY u.id_urbanizacion ASC
+        """
+        cursor.execute(query)
+        urbanizaciones = cursor.fetchall()
+        
+        cursor.close()
+        connection.close()
+
+        return jsonify(urbanizaciones)
+
+    #Generar pdf del reporte
+    @app.route('/report/urbanizaciones/pdf', methods=['GET'])
+    @jwt_required()
+    def get_urbanizaciones_report_pdf():
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+
+        query = """
+            SELECT u.id_urbanizacion, u.nombre, u.cif, u.direccion, u.cod_postal, c.nombre AS ciudad, p.nombre AS pais
+            FROM urbanizacion u
+            JOIN ciudad c ON u.id_ciudad = c.id_ciudad
+            JOIN pais p ON c.id_pais = p.id_pais
+            ORDER BY u.id_urbanizacion ASC
+        """
+        cursor.execute(query)
+        urbanizaciones = cursor.fetchall()
+
+        cursor.close()
+        connection.close()
+
+        pdf_buffer = generar_reporte_pdf(urbanizaciones)
+        return send_file(pdf_buffer, as_attachment=True, attachment_filename='urbanizaciones_reporte.pdf', mimetype='application/pdf')
+
     #Añadir Urbanizacion 
 
     @app.route('/register_urbanizacion', methods=['POST'])
@@ -1050,7 +1186,9 @@ def register_routes(app):
     def secure_filename(filename):
         return filename
 
-    #Editar Urbanizacion
+
+
+    # Editar Urbanizacion
     
     @app.route('/urbanizacion/<int:id>', methods=['PUT'])
     @jwt_required()
@@ -1128,8 +1266,10 @@ def register_routes(app):
             cursor.close()
             connection.close()
             return jsonify({'error': f'Error al actualizar la urbanización: {e}'}), 500
-    
-    #Eliminar Urbanizacion
+
+
+
+    # Eliminar Urbanizacion
 
     @app.route('/urbanizacion/<int:id>', methods=['DELETE'])
     @jwt_required()
@@ -1168,7 +1308,13 @@ def register_routes(app):
             connection.close()
             return jsonify({'error': f'Error al eliminar la urbanización: {e}'}), 500
 
-    # PAIS
+
+    #------------------------------------------------------------------------------------------------------------------------------------------    
+    #-------------------------------------------------------- PAIS ----------------------------------------------------------------------------
+    #------------------------------------------------------------------------------------------------------------------------------------------    
+
+
+    # Obtener paises
 
     @app.route('/paises', methods=['GET'])
     @jwt_required()
@@ -1207,6 +1353,9 @@ def register_routes(app):
             connection.close()
             return jsonify({'error': f'Error al obtener los países: {e}'}), 500
 
+
+    #Obtener pais por id
+
     @app.route('/pais/<int:id>', methods=['GET'])
     @jwt_required()
     @cross_origin()
@@ -1242,6 +1391,9 @@ def register_routes(app):
             cursor.close()
             connection.close()
             return jsonify({'error': f'Error al obtener los detalles del país: {e}'}), 500
+
+
+    # Añadir pais
 
     @app.route('/paises', methods=['POST'])
     @jwt_required()
@@ -1289,6 +1441,10 @@ def register_routes(app):
             cursor.close()
             connection.close()
             return jsonify({'error': f'Error al añadir el país: {e}'}), 500
+
+
+
+    # Editar pais
 
     @app.route('/pais/<int:id>', methods=['PUT'])
     @jwt_required()
@@ -1347,6 +1503,9 @@ def register_routes(app):
             cursor.close()
             connection.close()
             return jsonify({'error': f'Error al actualizar los detalles del país: {e}'}), 500
+
+
+    # Eliminar pais
 
     @app.route('/pais/<int:id>', methods=['DELETE'])
     @jwt_required()
@@ -1407,9 +1566,14 @@ def register_routes(app):
             return jsonify({'error': f'Error al eliminar el país: {e}'}), 500
 
 
-    # CIUDAD
 
-    #Obtener ciudad por id
+    #------------------------------------------------------------------------------------------------------------------------------------------    
+    #----------------------------------------------------- CIUDAD -----------------------------------------------------------------------------
+    #------------------------------------------------------------------------------------------------------------------------------------------    
+
+
+    # Obtener ciudad por id
+
     @app.route('/ciudad/<int:id>', methods=['GET'])
     @jwt_required()
     @cross_origin()
@@ -1447,7 +1611,9 @@ def register_routes(app):
             return jsonify({'error': f'Error al obtener los datos de la ciudad: {e}'}), 500
 
 
-    #Obtener ciudades
+
+    # Obtener ciudades
+
     @app.route('/ciudades', methods=['GET'])
     @jwt_required()
     @cross_origin()
@@ -1486,7 +1652,9 @@ def register_routes(app):
             connection.close()
             return jsonify({'error': f'Error al obtener las ciudades: {e}'}), 500
 
-    #Añadir ciudades
+
+
+    # Añadir ciudades
     @app.route('/add_ciudad', methods=['POST'])
     @jwt_required()
     @cross_origin()
@@ -1533,6 +1701,9 @@ def register_routes(app):
             cursor.close()
             connection.close()
             return jsonify({'error': f'Error al añadir la ciudad: {e}'}), 500
+
+
+    # Editar ciudad
 
     @app.route('/ciudad/<int:id>', methods=['PUT'])
     @jwt_required()
@@ -1592,6 +1763,8 @@ def register_routes(app):
             return jsonify({'error': f'Error al actualizar los datos de la ciudad: {e}'}), 500
 
 
+    # Eliminar ciudad
+
     @app.route('/ciudad/<int:id>', methods=['DELETE'])
     @jwt_required()
     @cross_origin()
@@ -1636,3 +1809,116 @@ def register_routes(app):
             cursor.close()
             connection.close()
             return jsonify({'error': f'Error al eliminar la ciudad: {e}'}), 500
+
+
+    #------------------------------------------------------------------------------------------------------------------------------------------    
+    #------------------------------------------------- SERVICIO EXTERNO -----------------------------------------------------------------------
+    #------------------------------------------------------------------------------------------------------------------------------------------    
+
+
+
+    # Obtener servicios externos urbanizacion
+    
+    @app.route('/urbanizacion/<int:urbanizacion_id>/servicios_externos', methods=['GET'])
+    @jwt_required()
+    @cross_origin()
+    def get_servicios_externos(urbanizacion_id):
+        current_user_id = get_jwt_identity()
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+
+        # Verificar que el usuario pertenece a la urbanización
+        cursor.execute("""
+            SELECT id_rol 
+            FROM user 
+            WHERE id_perfilUsuario = %s AND id_urbanizacion = %s
+        """, (current_user_id, urbanizacion_id))
+        user_data = cursor.fetchone()
+
+        if not user_data:
+            cursor.close()
+            connection.close()
+            return jsonify({'error': 'No autorizado. Solo los usuarios que pertenecen a la urbanización pueden acceder a los servicios externos.'}), 403
+
+        try:
+            # Obtener todos los servicios externos asociados a la urbanización
+            cursor.execute("""
+                SELECT se.id_servicioExterno, se.cif, se.descripcion, se.nombre, se.telefono, us.activo
+                FROM servicio_externo se
+                JOIN urbanizacion_servicio us ON se.id_servicioExterno = us.id_servicioExterno
+                WHERE us.id_urbanizacion = %s
+            """, (urbanizacion_id,))
+            servicios_externos = cursor.fetchall()
+
+            cursor.close()
+            connection.close()
+            return jsonify(servicios_externos), 200
+        except Exception as e:
+            cursor.close()
+            connection.close()
+            return jsonify({'error': f'Error al obtener los servicios externos: {e}'}), 500
+
+
+
+    # Añadir y asociar servicio externo
+
+    @app.route('/add_servicio_externo', methods=['POST'])
+    @jwt_required()
+    @cross_origin()
+    def add_servicio_externo():
+        current_user_id = get_jwt_identity()
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+
+        # Verificar que el usuario actual es administrador
+        cursor.execute("""
+            SELECT r.nombre AS role, u.id_urbanizacion
+            FROM user u
+            JOIN rol r ON u.id_rol = r.id_rol
+            WHERE u.id_perfilUsuario = %s
+        """, (current_user_id,))
+        role_data = cursor.fetchone()
+        
+        if not role_data or role_data['role'] != 'administrador':
+            cursor.close()
+            connection.close()
+            return jsonify({'error': 'No autorizado. Solo los administradores pueden añadir nuevos servicios externos.'}), 403
+
+        urbanization_id = role_data['id_urbanizacion']
+
+        data = request.get_json()
+        cif = data.get('cif')
+        descripcion = data.get('descripcion')
+        nombre = data.get('nombre')
+        telefono = data.get('telefono')
+        activo = data.get('activo', True)  # Por defecto el servicio está activo
+
+        if not all([cif, descripcion, nombre, telefono]):
+            cursor.close()
+            connection.close()
+            return jsonify({'error': 'Faltan datos para registrar el servicio externo'}), 400
+
+        try:
+            # Añadir servicio externo
+            cursor.execute("""
+                INSERT INTO servicio_externo (cif, descripcion, nombre, telefono) 
+                VALUES (%s, %s, %s, %s)
+            """, (cif, descripcion, nombre, telefono))
+            connection.commit()
+            new_servicio_id = cursor.lastrowid
+
+            # Asociar el servicio externo a la urbanización
+            cursor.execute("""
+                INSERT INTO urbanizacion_servicio (id_servicioExterno, id_urbanizacion, activo) 
+                VALUES (%s, %s, %s)
+            """, (new_servicio_id, urbanization_id, activo))
+            connection.commit()
+
+            cursor.close()
+            connection.close()
+            return jsonify({'success': 'Servicio externo añadido y asociado exitosamente a la urbanización', 'id_servicioExterno': new_servicio_id}), 201
+        except Exception as e:
+            connection.rollback()
+            cursor.close()
+            connection.close()
+            return jsonify({'error': f'Error al registrar el servicio externo: {e}'}), 500
