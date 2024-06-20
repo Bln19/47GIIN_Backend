@@ -2,7 +2,7 @@ import mysql.connector
 from .models import Rol
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 import io
 # Función para obtener el ID del rol por nombre
@@ -25,7 +25,10 @@ def get_db_connection():
         print(f"Error de conexión: {err}")
         return None
 
+
+
 # Generar PDF urbanizacion Urbanizaciones
+
 def generar_reporte_pdf(urbanizaciones):
     pdf_buffer = io.BytesIO()
     document = SimpleDocTemplate(pdf_buffer, pagesize=A4)
@@ -54,7 +57,10 @@ def generar_reporte_pdf(urbanizaciones):
     pdf_buffer.seek(0)
     return pdf_buffer
 
+
+
 # Generar PDF urbanizacion Propietarios
+
 def generar_reporte_propietarios_pdf(nombre_urbanizacion, propietarios):
     pdf_buffer = io.BytesIO()
     document = SimpleDocTemplate(pdf_buffer, pagesize=A4)
@@ -62,13 +68,47 @@ def generar_reporte_propietarios_pdf(nombre_urbanizacion, propietarios):
     elements = []
     styles = getSampleStyleSheet()
 
-    # Añadir el título del reporte
     title = Paragraph(f"Reporte de Propietarios - {nombre_urbanizacion}", styles['Title'])
     elements.append(title)
 
     data = [['ID', 'Nombre', 'Apellidos', 'Email', 'Teléfono']] + \
         [[prop['id_perfilUsuario'], prop['nombre'], prop['apellidos'], prop['email'], prop['telefono']]
             for prop in propietarios]
+
+    table = Table(data)
+    style = TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ])
+    table.setStyle(style)
+
+    elements.append(table)
+    document.build(elements)
+
+    pdf_buffer.seek(0)
+    return pdf_buffer
+
+
+
+# Generar PDF urbanizacion Empleados
+def generar_reporte_empleados_pdf(nombre_urbanizacion, empleados):
+    pdf_buffer = io.BytesIO()
+    document = SimpleDocTemplate(pdf_buffer, pagesize=A4)
+
+    elements = []
+    styles = getSampleStyleSheet()
+
+    title = Paragraph(f"Reporte de Empleados - {nombre_urbanizacion}", styles['Title'])
+    elements.append(title)
+
+    data = [['ID', 'Nombre', 'Apellidos', 'Email', 'Teléfono']] + \
+        [[emp['id_perfilUsuario'], emp['nombre'], emp['apellidos'], emp['email'], emp['telefono']]
+            for emp in empleados]
 
     table = Table(data)
     style = TableStyle([

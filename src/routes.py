@@ -3,7 +3,7 @@ from flask_cors import cross_origin
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token
 from werkzeug.security import check_password_hash, generate_password_hash
 from .models import db, User, Rol, Permiso, Urbanizacion
-from .helpers import get_db_connection, get_role_id, generar_reporte_pdf, generar_reporte_propietarios_pdf
+from .helpers import get_db_connection, get_role_id, generar_reporte_pdf, generar_reporte_propietarios_pdf, generar_reporte_empleados_pdf
 import os, io
 
 
@@ -525,6 +525,65 @@ def register_routes(app):
             return jsonify({'error': 'Empleado no encontrado'}), 404
         
         return jsonify(propietario), 200
+
+
+    #Generar reportes de empleados de una urbanizacion
+
+    @app.route('/report/empleados/pdf', methods=['GET'])
+    @jwt_required()
+    def get_empleados_report_pdf():
+        current_user_id = get_jwt_identity()
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+
+        # Obtener el urbanizacion_id del usuario autenticado
+        query_user = """
+            SELECT id_urbanizacion
+            FROM user
+            WHERE id_perfilUsuario = %s
+        """
+        cursor.execute(query_user, (current_user_id,))
+        user = cursor.fetchone()
+
+        if not user or not user['id_urbanizacion']:
+            cursor.close()
+            connection.close()
+            return jsonify({'error': 'Urbanización no encontrada para el usuario autenticado'}), 404
+
+        urbanizacion_id = user['id_urbanizacion']
+
+        # Obtener el nombre de la urbanización
+        query_urbanizacion = """
+            SELECT nombre
+            FROM urbanizacion
+            WHERE id_urbanizacion = %s
+        """
+        cursor.execute(query_urbanizacion, (urbanizacion_id,))
+        urbanizacion = cursor.fetchone()
+
+        if not urbanizacion:
+            cursor.close()
+            connection.close()
+            return jsonify({'error': 'Urbanización no encontrada'}), 404
+
+        nombre_urbanizacion = urbanizacion['nombre']
+
+        # Obtener los empleados de la urbanización
+        query_empleados = """
+            SELECT u.id_perfilUsuario, u.nombre, u.apellidos, u.email, u.telefono
+            FROM user u
+            WHERE u.id_rol = (SELECT id_rol FROM rol WHERE nombre = 'empleado')
+            AND u.id_urbanizacion = %s
+            ORDER BY u.id_perfilUsuario ASC
+        """
+        cursor.execute(query_empleados, (urbanizacion_id,))
+        empleados = cursor.fetchall()
+
+        cursor.close()
+        connection.close()
+
+        pdf_buffer = generar_reporte_empleados_pdf(nombre_urbanizacion, empleados)
+        return send_file(pdf_buffer, as_attachment=True, attachment_filename='empleados_reporte.pdf', mimetype='application/pdf')
 
 
     #Editar empleado
